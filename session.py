@@ -57,7 +57,11 @@ def _is_expired():
     return time.time() - os.path.getmtime(SESSION_FILE) > SESSION_TTL
 
 
-def ask(user_text: str) -> str:
+def ask(user_text: str, on_event=None) -> str:
+    """Run Claude CLI with stream-json and call on_event(event_type, detail) in real-time.
+
+    event_type is one of: "text", "tool_use", "result".
+    """
     if _is_expired():
         log.info(f"Session expired after {SESSION_TTL}s, starting new")
         reset()
@@ -66,36 +70,71 @@ def ask(user_text: str) -> str:
     model = os.environ.get("CLAUDE_MODEL", "claude-haiku-4-5-20251001")
     cmd = [
         CLAUDE, "-p", user_text,
-        "--output-format", "json",
+        "--output-format", "stream-json",
         "--model", model,
         "--allowedTools", "Bash",
         "--system-prompt", _load_system_prompt(),
+        "--verbose"
     ]
     if session_id:
         log.info(f"Resuming session {session_id}")
         cmd.extend(["--resume", session_id])
 
+    proc = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+    )
+
+    final_text = ""
     try:
-        result = subprocess.run(
-            cmd, capture_output=True, text=True,
-            timeout=120
-        )
+        for line in proc.stdout:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                data = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+            msg_type = data.get("type")
+            log.debug(f"STREAM raw: {json.dumps(data)[:500]}")
+
+            if msg_type == "assistant" and "message" in data:
+                for block in data["message"].get("content", []):
+                    if isinstance(block, dict):
+                        if block.get("type") == "text":
+                            text = block["text"].strip()
+                            if text and on_event:
+                                on_event("text", text)
+                            final_text = text
+                        elif block.get("type") == "tool_use":
+                            tool_name = block.get("name", "tool")
+                            if on_event:
+                                on_event("tool_use", tool_name)
+
+            elif msg_type == "result":
+                result_text = data.get("result", "").strip()
+                if result_text:
+                    final_text = result_text
+                sid = data.get("session_id")
+                if sid:
+                    try:
+                        _save_session_id(sid)
+                    except Exception as e:
+                        log.warning(f"Failed to save session: {e}")
+                if on_event:
+                    on_event("result", final_text)
+
+        proc.wait(timeout=120)
     except subprocess.TimeoutExpired:
-        log.error("Claude timed out after 120s")
+        proc.kill()
+        log.error("Claude timed out")
         return "Sorry, that took too long. Please try again."
 
-    try:
-        data = json.loads(result.stdout.strip())
-        if "session_id" in data:
-            try:
-                _save_session_id(data["session_id"])
-            except Exception as e:
-                log.warning(f"Failed to save session: {e}")
-        return data.get("result", "").strip()
-    except (json.JSONDecodeError, KeyError):
-        if result.returncode != 0:
-            log.error(f"Claude exited {result.returncode}: {result.stderr.strip()}")
-        return result.stdout.strip()
+    if proc.returncode != 0:
+        stderr = proc.stderr.read().strip()
+        log.error(f"Claude exited {proc.returncode}: {stderr}")
+
+    return final_text
 
 
 def reset():

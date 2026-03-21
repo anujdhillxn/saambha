@@ -67,10 +67,18 @@ def speak(text: str):
 
 def run_command(text: str) -> dict:
     log.info(f'INPUT: "{text}"')
-    response_text = session.ask(text)
+
+    def on_event(event_type, content):
+        if event_type == "text":
+            log.info(f"STREAM text: {content!r}")
+            notify("Claude", content)
+        elif event_type == "tool_use":
+            log.info(f"STREAM tool: {content}")
+            notify("Claude running", content)
+
+    response_text = session.ask(text, on_event=on_event)
     log.info(f'RESPONSE: {response_text!r}')
     if response_text:
-        notify(response_text)
         speak(response_text)
     return {"input": text, "text": response_text}
 
