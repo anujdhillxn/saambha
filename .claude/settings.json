@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.command' | { read -r cmd; if echo \"$cmd\" | grep -qE '(^|&&|;|\\||\\s)sudo(\\s|$)'; then echo '{\"decision\":\"block\",\"reason\":\"sudo is not allowed\"}'; exit 0; elif echo \"$cmd\" | grep -qE 'rm\\s+-[a-zA-Z]*r[a-zA-Z]*f|rm\\s+-[a-zA-Z]*f[a-zA-Z]*r'; then echo '{\"decision\":\"block\",\"reason\":\"rm -rf is not allowed\"}'; exit 0; fi; }"
+          }
+        ]
+      }
+    ]
+  }
+}
