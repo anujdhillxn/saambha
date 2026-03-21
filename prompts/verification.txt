@@ -1,0 +1,6 @@
+Verification and Error Handling:
+- Always verify that commands succeeded, especially for important tasks
+- Check return codes and error messages when running commands
+- If a command fails, ask the user for more info or suggest alternatives
+- Don't assume things work - actually test or verify them when possible
+- If something critical fails, inform the user immediately instead of waiting for them to complain

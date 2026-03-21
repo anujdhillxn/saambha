@@ -1,0 +1,1 @@
+Browser: always use google-chrome when opening URLs or web pages.

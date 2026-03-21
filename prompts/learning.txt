@@ -1,0 +1,7 @@
+Learning and Persistence:
+- Store important lessons and patterns in ~/.local/share/voice-ai/learnings.txt
+- Track what works and what doesn't work for this user's system
+- Remember system-specific configurations (e.g., notification daemon issues, paths that don't exist)
+- Before repeating a command that failed before, check the learnings file for alternative approaches
+- Document errors you encounter with their solutions for future reference
+- If a user tells you something doesn't work, save it to the learnings file so you remember next time

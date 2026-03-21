@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Voice AI</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #111; color: #eee;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    height: 100dvh; padding: 24px;
+    -webkit-user-select: none; user-select: none;
+  }
+  #response {
+    text-align: center; font-size: 1.1rem; line-height: 1.5;
+    max-width: 90%; margin-bottom: 48px; min-height: 3em;
+    color: #ccc;
+  }
+  #response.active { color: #fff; }
+  #btn {
+    width: 120px; height: 120px; border-radius: 50%;
+    border: none; background: #333; color: #eee;
+    font-size: 1rem; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s, transform 0.1s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #btn.recording { background: #c0392b; transform: scale(1.1); }
+  #btn.sending   { background: #555; }
+  #btn svg { width: 48px; height: 48px; fill: currentColor; }
+  #status { margin-top: 24px; font-size: 0.85rem; color: #666; }
+</style>
+</head>
+<body>
+
+<div id="response">Tap the mic to speak</div>
+
+<button id="btn" aria-label="Record">
+  <svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.93V21h2v-3.07A7 7 0 0 0 19 11h-2z"/></svg>
+</button>
+
+<div id="status"></div>
+
+<script>
+const btn = document.getElementById('btn');
+const resp = document.getElementById('response');
+const status = document.getElementById('status');
+
+let mediaRecorder = null;
+let chunks = [];
+
+btn.addEventListener('pointerdown', startRecording);
+btn.addEventListener('pointerup', stopRecording);
+btn.addEventListener('pointerleave', stopRecording);
+
+async function startRecording(e) {
+  e.preventDefault();
+  if (mediaRecorder && mediaRecorder.state === 'recording') return;
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    chunks = [];
+    mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+    mediaRecorder.ondataavailable = ev => chunks.push(ev.data);
+    mediaRecorder.onstop = sendAudio;
+    mediaRecorder.start();
+    btn.classList.add('recording');
+    status.textContent = 'Listening...';
+  } catch (err) {
+    status.textContent = 'Mic access denied';
+  }
+}
+
+function stopRecording(e) {
+  e.preventDefault();
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    mediaRecorder.stop();
+    mediaRecorder.stream.getTracks().forEach(t => t.stop());
+    btn.classList.remove('recording');
+  }
+}
+
+async function sendAudio() {
+  if (chunks.length === 0) return;
+  btn.classList.add('sending');
+  status.textContent = 'Thinking...';
+
+  const blob = new Blob(chunks, { type: 'audio/webm' });
+  const form = new FormData();
+  form.append('audio', blob, 'recording.webm');
+
+  try {
+    const res = await fetch('/voice', { method: 'POST', body: form });
+    const data = await res.json();
+    if (data.text) {
+      resp.textContent = data.text;
+      resp.classList.add('active');
+    } else {
+      resp.textContent = data.detail || 'No response';
+      resp.classList.remove('active');
+    }
+  } catch (err) {
+    resp.textContent = 'Connection error';
+    resp.classList.remove('active');
+  }
+
+  btn.classList.remove('sending');
+  status.textContent = '';
+}
+</script>
+</body>
+</html>

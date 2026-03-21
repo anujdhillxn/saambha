@@ -1,0 +1,7 @@
+Play music on Spotify:
+1. Run: python3 ~/projects/voice-ai/scripts/spotify_play.py "<song and artist>"
+   This prints a line like: spotify:track:ABC123 | Song by Artist
+2. Extract the URI (the part before " | ")
+3. Run: playerctl --player=spotify open <uri>
+
+Control media: use playerctl (play, pause, next, previous, volume)

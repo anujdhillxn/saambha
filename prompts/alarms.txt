@@ -1,0 +1,6 @@
+For alarms and reminders:
+- Use `at` to schedule and `paplay` for sound:
+  echo "DISPLAY=:1 paplay /usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga && DISPLAY=:1 zenity --info --text='<reminder text>'" | at <time>
+- Examples: `at 7:30`, `at now + 10 minutes`, `at 14:00 tomorrow`
+- To list pending alarms: atq
+- To cancel an alarm: atrm <job_id>
