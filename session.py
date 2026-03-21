@@ -1,3 +1,4 @@
+import shutil
 import subprocess
 import json
 import logging
@@ -6,9 +7,8 @@ import time
 
 log = logging.getLogger("voice-ai")
 
-CLAUDE = os.path.expanduser("~/.local/bin/claude")
+CLAUDE = shutil.which("claude") or os.path.expanduser("~/.local/bin/claude")
 SESSION_FILE = os.path.expanduser("~/.config/voice-ai/session_id")
-PROJECT_DIR = os.path.expanduser("~/projects/voice-ai")
 SESSION_TTL = int(os.environ.get("SESSION_TTL_SECONDS", 3600))
 
 PROMPTS_DIR = os.path.join(os.path.dirname(__file__), "prompts")
@@ -18,11 +18,21 @@ def _load_system_prompt():
     parts = []
     base = os.path.join(PROMPTS_DIR, "base.txt")
     if os.path.exists(base):
-        parts.append(open(base).read().strip())
-    for f in sorted(os.listdir(PROMPTS_DIR)):
-        if f == "base.txt" or not f.endswith(".txt"):
+        with open(base) as f:
+            parts.append(f.read().strip())
+    try:
+        filenames = sorted(os.listdir(PROMPTS_DIR))
+    except OSError as e:
+        log.warning(f"Could not read prompts directory: {e}")
+        return "\n\n".join(parts)
+    for name in filenames:
+        if name == "base.txt" or not name.endswith(".txt"):
             continue
-        parts.append(open(os.path.join(PROMPTS_DIR, f)).read().strip())
+        try:
+            with open(os.path.join(PROMPTS_DIR, name)) as f:
+                parts.append(f.read().strip())
+        except OSError as e:
+            log.warning(f"Skipping prompt {name}: {e}")
     return "\n\n".join(parts)
 
 os.makedirs(os.path.dirname(SESSION_FILE), exist_ok=True)
@@ -30,7 +40,8 @@ os.makedirs(os.path.dirname(SESSION_FILE), exist_ok=True)
 
 def _load_session_id():
     if os.path.exists(SESSION_FILE):
-        return open(SESSION_FILE).read().strip() or None
+        with open(SESSION_FILE) as f:
+            return f.read().strip() or None
     return None
 
 
@@ -64,10 +75,14 @@ def ask(user_text: str) -> str:
         log.info(f"Resuming session {session_id}")
         cmd.extend(["--resume", session_id])
 
-    result = subprocess.run(
-        cmd, capture_output=True, text=True,
-        timeout=120, cwd=PROJECT_DIR
-    )
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True,
+            timeout=120
+        )
+    except subprocess.TimeoutExpired:
+        log.error("Claude timed out after 120s")
+        return "Sorry, that took too long. Please try again."
 
     try:
         data = json.loads(result.stdout.strip())

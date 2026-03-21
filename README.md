@@ -38,7 +38,6 @@ python3 server.py
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/voice` | Upload audio, transcribe, run |
-| POST | `/text` | Send text command |
 | POST | `/reset` | Clear session |
 | GET | `/status` | Health check |
 

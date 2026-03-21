@@ -15,9 +15,11 @@ if [ -f "$PID_FILE" ]; then
 
     if [ -s "$TMP_FILE" ]; then
         zenity --notification --text="⏳ Processing..." &
-        curl -sk -X POST "$SERVER/voice" \
+        if ! curl -sk --fail -X POST "$SERVER/voice" \
             -F "audio=@$TMP_FILE;type=audio/wav" \
-            -o /dev/null
+            -o /dev/null --max-time 130; then
+            zenity --notification --text="Voice AI: Request failed" &
+        fi
     else
         zenity --notification --text="Voice AI: No audio captured" &
     fi

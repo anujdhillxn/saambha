@@ -19,7 +19,6 @@ def _load_env():
 _load_env()
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
-from pydantic import BaseModel
 
 import session
 from transcribe import transcribe
@@ -36,8 +35,34 @@ def notify(title: str, body: str = ""):
     subprocess.Popen(["zenity", "--notification", f"--text={text}"], env=env)
 
 
+PIPER_VOICES_DIR = os.path.expanduser("~/.local/share/piper-voices")
+PIPER_MODEL_NAME = os.environ.get("PIPER_MODEL", "en_US-lessac-medium")
+PIPER_MODEL_PATH = os.path.join(PIPER_VOICES_DIR, f"{PIPER_MODEL_NAME}.onnx")
+PIPER_BASE_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0"
+
+
+def _ensure_piper_model():
+    if os.path.exists(PIPER_MODEL_PATH):
+        return
+    os.makedirs(PIPER_VOICES_DIR, exist_ok=True)
+    # en_US-lessac-medium -> en/en_US/lessac/medium
+    parts = PIPER_MODEL_NAME.split("-")
+    lang, region, voice, quality = parts[0], f"{parts[0]}_{parts[1]}", parts[2], parts[3]
+    base = f"{PIPER_BASE_URL}/{lang}/{region}/{voice}/{quality}/{PIPER_MODEL_NAME}"
+    log.info(f"Downloading piper model {PIPER_MODEL_NAME}...")
+    for ext in (".onnx", ".onnx.json"):
+        subprocess.run(
+            ["curl", "-L", "-o", os.path.join(PIPER_VOICES_DIR, f"{PIPER_MODEL_NAME}{ext}"), f"{base}{ext}"],
+            check=True,
+        )
+    log.info("Piper model downloaded")
+
+
 def speak(text: str):
-    subprocess.Popen(["espeak-ng", text])
+    subprocess.Popen(
+        f"echo {subprocess.list2cmdline([text])} | piper -m {subprocess.list2cmdline([PIPER_MODEL_PATH])} --output-raw | aplay -r 22050 -f S16_LE -q",
+        shell=True,
+    )
 
 
 def run_command(text: str) -> dict:
@@ -46,21 +71,18 @@ def run_command(text: str) -> dict:
     log.info(f'RESPONSE: {response_text!r}')
     if response_text:
         notify(response_text)
-        #speak(response_text)
+        speak(response_text)
     return {"input": text, "text": response_text}
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _ensure_piper_model()
     print(f"Voice AI server running on http://0.0.0.0:{PORT}")
     yield
 
 
 app = FastAPI(lifespan=lifespan)
-
-
-class TextCommand(BaseModel):
-    text: str
 
 
 @app.post("/voice")
@@ -78,12 +100,6 @@ async def voice_endpoint(audio: UploadFile = File(...)):
         os.unlink(tmp_path)
 
 
-@app.post("/text")
-async def text_endpoint(body: TextCommand):
-    if not body.text.strip():
-        raise HTTPException(400, "Empty command")
-    return run_command(body.text.strip())
-
 
 @app.post("/reset")
 async def reset_endpoint():
@@ -97,7 +113,6 @@ async def status_endpoint():
         "ok": True,
         "has_session": session._load_session_id() is not None,
     }
-
 
 from fastapi.staticfiles import StaticFiles
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
