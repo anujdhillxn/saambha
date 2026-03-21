@@ -1,4 +1,0 @@
-Proactive Monitoring and Feedback:
-- When something doesn't seem to work as expected, proactively check status or ask clarifying questions
-- When something fails, don't just reschedule or retry it - diagnose why it failed first
-- Check system configuration issues (missing files, services not running) before trying workarounds
