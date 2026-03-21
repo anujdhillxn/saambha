@@ -1,82 +1,47 @@
 # Voice AI
 
-Voice-controlled Linux desktop assistant. Press a hotkey, speak a command, Claude Code executes it.
-
-## Architecture
-
-```
-Super+C (press)  → start recording (sox)
-Super+C (press)  → stop recording → POST /voice → Whisper transcribes
-                                                 → Claude Code agent loop
-                                                 → bash tool executes commands
-                                                 → result shown as notification
-```
+Voice-controlled Linux desktop assistant. Speak a command, Claude executes it.
 
 ## Setup
 
-### Dependencies
-
 ```bash
-pip3 install faster-whisper fastapi uvicorn python-multipart anthropic --break-system-packages
 sudo apt install sox playerctl
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
 ```
 
-### Environment
+Copy `.env.sample` to `.env` and fill in your values.
 
-Copy `.env.example` to `.env` and fill in your values:
+### Hotkey
 
-| Variable               | Default                      | Description                            |
-|------------------------|------------------------------|----------------------------------------|
-| `CLAUDE_MODEL`         | `claude-haiku-4-5-20251001`  | Anthropic model for the agent          |
-| `WHISPER_MODEL`        | `small`                      | Whisper model (tiny/base/small/medium) |
-| `PORT`                 | `8765`                       | Server port                            |
-| `SPOTIFY_CLIENT_ID`    | —                            | Spotify API client ID                  |
-| `SPOTIFY_CLIENT_SECRET`| —                            | Spotify API client secret              |
+Bind `scripts/voice-ai-trigger.sh` to a keyboard shortcut (e.g. `Super+C`) via Settings → Keyboard → Custom Shortcuts.
 
-### Hotkey Setup
+### Mobile Access
 
-`Super+C` — toggle recording (first press starts, second press stops and sends)
-
-The trigger script is at `scripts/voice-ai-trigger.sh`. To configure the hotkey via gsettings:
+Generate SSL certs for mic access over WiFi:
 
 ```bash
-gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings \
-  "['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/']"
-
-gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ name 'Voice AI'
-gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ command "$HOME/projects/voice-ai/scripts/voice-ai-trigger.sh"
-gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ binding '<Super>c'
+openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 365 -nodes -subj '/CN=voice-ai'
 ```
 
-Or via GUI: **Settings → Keyboard → Keyboard Shortcuts → Custom Shortcuts → +**
-- Name: `Voice AI`
-- Command: `~/projects/voice-ai/scripts/voice-ai-trigger.sh`
-- Shortcut: `Super+C`
+Then open `https://<hostname>.local:8765` on your phone.
 
 ## Running
 
 ```bash
-cd ~/projects/voice-ai
 python3 server.py
 ```
 
-Server runs on `http://localhost:8765`
+## API
 
-## API Endpoints
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/voice` | Upload audio, transcribe, run |
+| POST | `/text` | Send text command |
+| POST | `/reset` | Clear session |
+| GET | `/status` | Health check |
 
-| Method | Endpoint   | Description                        |
-|--------|------------|------------------------------------|
-| POST   | `/voice`   | Upload audio file, transcribe, run |
-| POST   | `/text`    | Send text command directly         |
-| POST   | `/reset`   | Clear session context              |
-| GET    | `/history` | Last 50 commands and results       |
-| GET    | `/status`  | Server health info                 |
+## Prompts
 
-## How It Works
-
-1. **Trigger** — `voice-ai-trigger.sh` records audio via `sox`, sends it to the server
-2. **Transcribe** — `faster-whisper` (local, runs on CPU) converts speech to text
-3. **Agent** — Claude Code runs as an agent with a Bash tool, executing commands as needed
-4. **Spotify** — `scripts/spotify_play.py` searches the Spotify API for track URIs, then `playerctl` plays them
-5. **Notify** — results shown as desktop notifications via `zenity`
-
+System prompt is built from `prompts/*.txt` (`base.txt` first, then alphabetically). The AI can add/edit its own prompt files to learn new capabilities.
