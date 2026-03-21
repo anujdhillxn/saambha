@@ -2,16 +2,15 @@
 
 Voice-controlled Linux desktop assistant. Speak a command, Claude executes it.
 
-## Setup
+## Setup & Running
+
+Copy `.env.sample` to `.env` and fill in your values, then:
 
 ```bash
-sudo apt install sox playerctl
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+./start.sh
 ```
 
-Copy `.env.sample` to `.env` and fill in your values.
+This handles everything: installs system deps (`sox`, `playerctl`), creates a Python venv, installs pip packages, generates SSL certs for mobile access, and starts the server.
 
 ### Hotkey
 
@@ -19,19 +18,7 @@ Bind `scripts/voice-ai-trigger.sh` to a keyboard shortcut (e.g. `Super+C`) via S
 
 ### Mobile Access
 
-Generate SSL certs for mic access over WiFi:
-
-```bash
-openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 365 -nodes -subj '/CN=voice-ai'
-```
-
-Then open `https://<hostname>.local:8765` on your phone.
-
-## Running
-
-```bash
-python3 server.py
-```
+Open `https://<hostname>.local:8765` on your phone.
 
 ## API
 
