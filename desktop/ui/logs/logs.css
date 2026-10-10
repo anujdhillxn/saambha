@@ -1,0 +1,10 @@
+body { background: var(--color-surface-deep); color: var(--color-text); }
+pre {
+  margin: 0;
+  height: 100%;
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 10px 14px;
+  font: var(--font-mono);
+  white-space: pre-wrap;
+}

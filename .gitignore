@@ -5,3 +5,8 @@ __pycache__/
 server.log
 venv/
 .venv/
+devices.json
+.pytest_cache/
+server/.claude/skills
+desktop/target/
+desktop/gen/

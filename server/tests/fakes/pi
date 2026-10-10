@@ -1,0 +1,58 @@
+#!/usr/bin/env python3
+"""Fake `pi --mode json --print ... -- <message>`: replies "You said: <message>" with the same
+events the real pi prints (see tests/integration for the real thing).
+
+Logs each call to $SAAMBHA_FAKES_STATE/pi_calls.jsonl. A message mentioning "music" reads the
+spotify skill first. $SAAMBHA_FAKES_STATE/pi_mode:
+  "hang"         never answers
+  "error"        the model call fails (after pi's own retries)
+  "retry"        the first model call fails, the retry succeeds
+  "no-auth"      exits 1 before starting, like pi with no login
+"""
+import json
+import os
+import sys
+from pathlib import Path
+
+state = Path(os.environ["SAAMBHA_FAKES_STATE"])
+args = sys.argv[1:]
+mode_file = state / "pi_mode"
+mode = mode_file.read_text().strip() if mode_file.exists() else ""
+with (state / "pi_calls.jsonl").open("a") as f:
+    f.write(json.dumps({"args": args, "cwd": os.getcwd()}) + "\n")
+
+if mode == "hang":
+    os.execvp("sleep", ["sleep", "300"])
+if mode == "no-auth":
+    print("No API key found for anthropic.\n\nUse /login to log into a provider", file=sys.stderr)
+    sys.exit(1)
+
+message = args[args.index("--") + 1]
+
+
+def emit(event):
+    print(json.dumps(event), flush=True)
+
+
+def assistant(content, stop="stop", error=None):
+    msg = {"role": "assistant", "content": content, "stopReason": stop}
+    if error:
+        msg["errorMessage"] = error
+    emit({"type": "message_start", "message": msg})
+    emit({"type": "message_end", "message": msg})
+
+
+emit({"type": "session", "version": 3, "id": args[args.index("--session-id") + 1], "cwd": os.getcwd()})
+emit({"type": "agent_start"})
+emit({"type": "message_end", "message": {"role": "user", "content": [{"type": "text", "text": message}]}})
+if mode in ("error", "retry"):
+    assistant([], stop="error", error="Connection error.")
+    emit({"type": "auto_retry_start", "attempt": 1, "maxAttempts": 3, "delayMs": 0, "errorMessage": "Connection error."})
+if mode != "error":
+    if "music" in message:
+        call = {"type": "toolCall", "id": "call_1", "name": "read", "arguments": {"path": "skills/spotify/SKILL.md"}}
+        assistant([call], stop="toolUse")
+        emit({"type": "tool_execution_start", "toolCallId": "call_1", "toolName": "read", "args": call["arguments"]})
+        emit({"type": "tool_execution_end", "toolCallId": "call_1", "toolName": "read", "result": {}, "isError": False})
+    assistant([{"type": "text", "text": f"You said: {message}"}])
+emit({"type": "agent_end", "messages": []})
