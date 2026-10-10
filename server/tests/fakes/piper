@@ -1,0 +1,7 @@
+#!/bin/sh
+# Fake piper: saves the text it was given and its pid, then "speaks" for
+# $SAAMBHA_FAKES_STATE/speech_seconds (default 0).
+S="$SAAMBHA_FAKES_STATE"
+echo $$ > "$S/piper.pid"
+cat > "$S/spoken.txt"
+sleep "$(cat "$S/speech_seconds" 2>/dev/null || echo 0)"

@@ -1,0 +1,57 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Saambha</title>
+  <link rel="stylesheet" href="../shared/theme.css">
+  <link rel="stylesheet" href="../shared/overlay.css">
+  <link rel="stylesheet" href="../shared/dot.css">
+  <link rel="stylesheet" href="panel.css">
+  <link rel="stylesheet" href="stage.css">
+</head>
+<body>
+  <main id="card">
+    <header>
+      <span id="light"></span>
+      <div class="heading">
+        <h1>Saambha</h1>
+        <p id="line"></p>
+      </div>
+      <button id="logs" class="icon" title="Detailed logs">
+        <svg viewBox="0 0 24 24"><path d="M5 6h14M5 12h14M5 18h9"/></svg>
+      </button>
+      <button id="new" class="icon" title="New conversation">
+        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+      <button id="close" class="icon" title="Close">
+        <svg viewBox="0 0 24 24"><path d="M6 12h12"/></svg>
+      </button>
+    </header>
+    <section id="pairing" hidden>
+      <p id="asking"></p>
+      <button id="deny">Deny</button>
+      <button id="allow" class="primary">Allow</button>
+    </section>
+    <section id="chat"></section>
+    <footer>
+      <button id="stop" hidden>Stop speaking</button>
+      <form id="compose">
+        <input id="text" placeholder="Type a command" autocomplete="off" spellcheck="false">
+        <button class="icon primary" title="Send">
+          <svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
+        </button>
+      </form>
+    </footer>
+  </main>
+  <div id="dragged">
+    <div class="dot">
+      <svg class="mic" viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="9" y="3" width="6" height="11" rx="3"/>
+        <path d="M6 11a6 6 0 0 0 12 0M12 17v3.5M8.5 20.5h7"/>
+      </svg>
+      <div class="bars"><span></span><span></span><span></span></div>
+    </div>
+  </div>
+  <script type="module" src="stage.js"></script>
+</body>
+</html>

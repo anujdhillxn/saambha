@@ -1,0 +1,2 @@
+/* The dot's and the stage's windows: see-through but for what they show. */
+html, body { background: transparent; overflow: hidden; user-select: none; }

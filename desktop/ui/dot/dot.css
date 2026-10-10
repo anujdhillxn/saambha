@@ -1,0 +1,2 @@
+/* While dragged, the stage draws the dot under the pointer: here it fades out, and back in once dropped. */
+.away .dot { opacity: 0; }

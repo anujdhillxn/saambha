@@ -1,0 +1,11 @@
+/* The dot while it's dragged, in a box the size of its window (tauri.conf.json). */
+#dragged {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 72px;
+  height: 72px;
+  visibility: hidden;
+}
+#dragged.shown { visibility: visible; }
+#dragged .dot { cursor: grabbing; }

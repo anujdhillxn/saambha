@@ -1,0 +1,55 @@
+/* Design tokens for the dot, the chat panel and the log window. */
+:root {
+  color-scheme: dark;
+
+  /* What Saambha is doing */
+  --color-ready: #4dd180;
+  --color-cold: #8a8a90;
+  --color-listening: #f5554f;
+  --color-working: #ffb81a;
+  --color-asking: #4da8fa;
+  --color-stop: #f5554f;
+
+  /* Surfaces and text */
+  --color-surface: rgb(24 24 27 / 0.97);
+  --color-surface-deep: #141416;
+  --color-disc: #161618;
+  --color-disc-light: #2a2a2e;
+  --color-control: rgb(255 255 255 / 0.07);
+  --color-control-hover: rgb(255 255 255 / 0.15);
+  --color-border: rgb(255 255 255 / 0.08);
+  --color-text: #ececec;
+  --color-text-muted: rgb(236 236 236 / 0.6);
+  --color-text-faint: rgb(236 236 236 / 0.45);
+  --color-accent: #3584e4;
+  --color-accent-hover: #4a94ee;
+  --color-on-accent: #fff;
+  --color-shadow: rgb(0 0 0 / 0.5);
+
+  --font-ui: 13px/1.4 system-ui, sans-serif;
+  --font-mono: 12px/1.45 ui-monospace, "DejaVu Sans Mono", monospace;
+
+  --space-xs: 4px;
+  --space-s: 8px;
+  --space-m: 12px;
+  --space-l: 16px;
+  --radius-s: 9px;
+  --radius-m: 12px;
+  --radius-l: 18px;
+
+  --duration-fast: 0.15s;
+  --duration-medium: 0.25s;
+  --duration-slow: 0.5s;
+  --ease-spring: cubic-bezier(0.3, 1.6, 0.5, 1);
+  --ease-pop: cubic-bezier(0.2, 1.2, 0.4, 1);
+}
+
+/* Each state sets the colour its parts use. */
+.ready { --state: var(--color-ready); }
+.cold { --state: var(--color-cold); }
+.listening { --state: var(--color-listening); }
+.working { --state: var(--color-working); }
+.asking { --state: var(--color-asking); }
+
+html, body { margin: 0; height: 100%; }
+body { font: var(--font-ui); color: var(--color-text); }
