@@ -12,6 +12,7 @@ from saambha.logs import LogFile, configure_logging
 from saambha.model.activity import GpuMemoryHog, HeavyTaskDetector, HighCpuLoad, LowMemory
 from saambha.model.ollama import OllamaClient
 from saambha.model.warden import ModelWarden
+from saambha.mouse import Pacer, VirtualMouse
 from saambha.server.app import Services, create_app
 from saambha.server.auth import DeviceRegistry, Pairing
 from saambha.server.status import Status
@@ -105,6 +106,8 @@ def build_services(settings: Settings) -> Services:
         history=ChatHistory(settings.history_file),
         log=LogFile(settings.log_file, settings.log_view_bytes),
         transcriber=WhisperTranscriber(settings.whisper_model),
+        mouse=lambda: VirtualMouse(settings.uinput_path),
+        pacer=lambda: Pacer(settings.mouse_jitter_window, settings.mouse_max_delay),
         on_startup=on_startup,
         on_shutdown=on_shutdown,
     )

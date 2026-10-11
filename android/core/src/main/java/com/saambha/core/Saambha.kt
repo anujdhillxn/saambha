@@ -24,6 +24,12 @@ interface SaambhaClient {
      * if the desktop's address changed, pairing if this device isn't paired yet).
      */
     fun ask(text: String, speakOnDesktop: Boolean = true, onStatus: (String) -> Unit = {}): String
+
+    /**
+     * Connects (as [connect] does) and takes over the desktop's mouse until it's closed.
+     * [onClosed] gets why, if the server or the network ends it first.
+     */
+    fun openMouse(onClosed: (reason: String) -> Unit): MouseConnection
 }
 
 class Saambha(
@@ -31,6 +37,7 @@ class Saambha(
     private val locator: ServerLocator,
     private val localNetwork: LocalNetwork,
     private val store: PairingStore,
+    private val webSockets: WebSocketClient,
     private val deviceName: String,
     private val settings: Settings,
 ) : SaambhaClient {
@@ -53,6 +60,18 @@ class Saambha(
             if (!res.ok) throw IOException(res.detail)
             res.json.optString("text").ifEmpty { "(no reply)" }
         }
+
+    override fun openMouse(onClosed: (String) -> Unit): MouseConnection {
+        val lease = localNetwork.acquire()
+        try {
+            val server = connect(lease, onStatus = {})
+            val url = server.url.replaceFirst("https://", "wss://") + "/mouse"
+            return RemoteMouse(webSockets.open(lease.network, url, store.token, onClosed), lease)
+        } catch (e: Exception) {
+            lease.close()
+            throw e
+        }
+    }
 
     private fun connect(
         lease: LocalNetwork.Lease,
@@ -112,12 +131,14 @@ class Saambha(
         /** The real thing: Wi-Fi, the bundled CA, and pairing saved in SharedPreferences. */
         fun create(context: Context, settings: Settings = Settings()): Saambha {
             val app = context.applicationContext
-            val http = PinnedHttpClient.withBundledCa(app)
+            val tls = PinnedTls.bundled(app)
+            val http = PinnedHttpClient(tls)
             return Saambha(
                 http = http,
                 locator = ServerFinder(http, settings),
                 localNetwork = WifiNetwork(app.getSystemService(ConnectivityManager::class.java), settings),
                 store = PrefsPairingStore(app.getSharedPreferences("saambha", Context.MODE_PRIVATE)),
+                webSockets = OkHttpWebSockets(tls, settings),
                 deviceName = deviceName(),
                 settings = settings,
             )

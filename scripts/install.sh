@@ -64,6 +64,18 @@ step "HTTPS certificates"
 ../scripts/gen_certs.sh .
 echo "ok"
 
+step "Mouse (the apps' touchpad moves a virtual one)"
+if [ -w /dev/uinput ]; then
+    echo "ok"
+else
+    echo "Making virtual input devices (/dev/uinput) takes a udev rule that allows it for whoever is logged in,"
+    echo "which needs your password (sudo)"
+    echo 'KERNEL=="uinput", TAG+="uaccess"' | sudo tee /etc/udev/rules.d/70-saambha-uinput.rules >/dev/null
+    sudo udevadm control --reload
+    sudo udevadm trigger --name-match=uinput
+    echo "allowed"
+fi
+
 # The settings the rest depends on, as the server will see them.
 eval "$(PYTHONPATH=src venv/bin/python - <<'PY'
 import shlex

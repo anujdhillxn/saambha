@@ -5,6 +5,7 @@ The server runs as its own process (serve.py: the real wiring) with a fresh CA f
 127.0.0.2 / 127.0.0.3 stand in for LAN devices; only 127.0.0.1 counts as this machine, where the
 desktop app runs.
 """
+import asyncio
 import contextlib
 import json
 import os
@@ -19,6 +20,8 @@ from pathlib import Path
 
 import httpx
 import pytest
+from websockets.asyncio.client import connect
+from websockets.exceptions import InvalidStatus
 
 from conftest import Fakes, is_running, wait_until
 from saambha.settings import Settings
@@ -304,6 +307,36 @@ def test_desktop_app_endpoints_turn_away_paired_devices(server, fakes):
     with device(server, token=token) as d:
         assert d.get("/desktop/status").status_code == 403
         assert d.post("/desktop/pairing", json={"allow": True}).status_code == 403
+
+
+def touchpad(server, ip="127.0.0.2", token=None):
+    """The apps' touchpad connection (a WebSocket) from [ip]. The asyncio client: the sync one
+    sometimes misses the handshake's answer over TLS."""
+    return connect(server.url.replace("https://", "wss://") + "/mouse", ssl=server.ca,
+                   additional_headers={"Authorization": f"Bearer {token}"} if token else {},
+                   local_addr=(ip, 0), open_timeout=10)
+
+
+def test_touchpad_turns_away_unpaired_devices(server):
+    async def connect_unpaired():
+        async with touchpad(server):
+            pass
+
+    with pytest.raises(InvalidStatus, match="403"):
+        asyncio.run(connect_unpaired())
+
+
+def test_touchpad_says_why_it_cannot_move_the_mouse(server, fakes):
+    """The server has no /dev/uinput here (serve.py), so this is as far as a test gets without
+    moving the real mouse."""
+    token = pair(server, fakes)
+
+    async def wait_for_close():
+        async with touchpad(server, token=token) as ws:
+            await ws.wait_closed()
+            return ws.close_code, ws.close_reason
+
+    assert asyncio.run(wait_for_close()) == (1011, "Can't control the mouse: No such file or directory")
 
 
 @pytest.mark.bench

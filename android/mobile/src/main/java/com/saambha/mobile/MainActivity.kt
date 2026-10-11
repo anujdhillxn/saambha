@@ -14,6 +14,7 @@ import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.view.WindowManager
+import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.LinearLayout
@@ -21,6 +22,7 @@ import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
 import com.saambha.core.ConnectScreen
+import com.saambha.core.MouseActivity
 import com.saambha.core.Saambha
 import com.saambha.core.SaambhaClient
 import kotlin.concurrent.thread
@@ -28,7 +30,7 @@ import kotlin.concurrent.thread
 /**
  * Shows only a spinner while connecting to the saambha server (scan + pair if needed); pull down
  * to retry if that fails. Then: tap the mic, speak (the phone's own speech recognition), and the
- * words go to saambha. The reply is shown and spoken on the phone.
+ * words go to saambha. The reply is shown and spoken on the phone. Mouse opens the touchpad.
  */
 class MainActivity : Activity() {
 
@@ -142,11 +144,16 @@ class MainActivity : Activity() {
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(dp(24), dp(48), dp(24), dp(56))
+            setPadding(dp(24), dp(48), dp(24), dp(32))
             visibility = View.GONE
             addView(status)
             addView(replyArea)
             addView(micButton)
+            addView(Button(context).apply {
+                text = "Mouse"
+                layoutParams = LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { topMargin = dp(16) }
+                setOnClickListener { startActivity(Intent(context, MouseActivity::class.java)) }
+            })
         }
 
         connectScreen = ConnectScreen(

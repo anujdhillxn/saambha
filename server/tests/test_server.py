@@ -1,11 +1,16 @@
 import asyncio
+import time
+from itertools import pairwise
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
+from conftest import wait_until
 from saambha.history import ChatHistory
 from saambha.logs import LogFile
+from saambha.mouse import Pacer
 from saambha.server.app import Services, create_app
 from saambha.server.auth import Pairing
 from saambha.server.status import Status
@@ -73,6 +78,33 @@ class FakeTranscriber:
         return self.result
 
 
+class FakeMouse:
+    """Records what it was told to do, and whether it's on the desktop."""
+
+    def __init__(self):
+        self.done = []
+        self.there = False
+        self.error: OSError | None = None
+
+    def __enter__(self):
+        if self.error:
+            raise self.error
+        self.there = True
+        return self
+
+    def __exit__(self, *exc):
+        self.there = False
+
+    def move(self, dx, dy):
+        self.done.append(("move", dx, dy))
+
+    def click(self, button):
+        self.done.append(("click", button))
+
+    def scroll(self, notches):
+        self.done.append(("scroll", notches))
+
+
 class FakeDialog:
     def __init__(self, answer=True):
         self.answer = answer
@@ -84,7 +116,12 @@ class FakeDialog:
 
 
 @pytest.fixture
-def services(registry, clock, tmp_path) -> Services:
+def mouse():
+    return FakeMouse()
+
+
+@pytest.fixture
+def services(registry, clock, tmp_path, mouse) -> Services:
     history = ChatHistory(tmp_path / "history.jsonl", clock)
     return Services(
         assistant=FakeAssistant(),
@@ -95,6 +132,8 @@ def services(registry, clock, tmp_path) -> Services:
         history=history,
         log=LogFile(tmp_path / "server.log", backlog=1000),
         transcriber=FakeTranscriber(),
+        mouse=lambda: mouse,
+        pacer=lambda: Pacer(window=1.0, max_delay=0.15),
         hostname="desktop",
     )
 
@@ -390,3 +429,75 @@ def test_desktop_log_follows_the_log(desktop, services):
 
     assert first == {"text": "line 1\n", "offset": 7}
     assert after == {"text": "line 2\n", "offset": 14}
+
+
+# The apps' touchpad
+
+def test_touchpad_moves_clicks_and_scrolls_the_mouse(paired, mouse):
+    with paired.websocket_connect("/mouse") as ws:
+        ws.send_json({"type": "move", "dx": 12, "dy": -3, "t": 1000})
+        ws.send_json({"type": "click", "button": "left", "t": 1010})
+        ws.send_json({"type": "click", "button": "right", "t": 1020})
+        ws.send_json({"type": "scroll", "notches": -2, "t": 1030})
+        assert wait_until(lambda: len(mouse.done) == 4)
+
+    assert mouse.done == [("move", 12, -3), ("click", "left"), ("click", "right"), ("scroll", -2)]
+
+
+def test_touchpad_plays_bunched_moves_at_the_pace_they_happened(paired, mouse):
+    played = []
+    mouse.move = lambda dx, dy: played.append(time.monotonic())
+
+    with paired.websocket_connect("/mouse") as ws:
+        for t in range(0, 100, 20):  # sent together, though they happened 20ms apart
+            ws.send_json({"type": "move", "dx": 1, "dy": 0, "t": t})
+        assert wait_until(lambda: len(played) == 5)
+
+    assert [round(b - a, 2) for a, b in pairwise(played)] == [0.02] * 4
+
+
+def test_the_mouse_is_there_only_while_connected(paired, mouse):
+    with paired.websocket_connect("/mouse") as ws:
+        ws.send_json({"type": "move", "dx": 1, "dy": 1})
+        assert wait_until(lambda: mouse.done)
+        assert mouse.there
+
+    assert not mouse.there
+
+
+def test_touchpad_ignores_what_it_does_not_know(paired, mouse):
+    with paired.websocket_connect("/mouse") as ws:
+        ws.send_json({"type": "click", "button": "middle"})
+        ws.send_json({"type": "move", "dx": "far"})
+        ws.send_json({"type": "teleport"})
+        ws.send_json({"type": "move", "dx": 1, "dy": 2})
+        assert wait_until(lambda: mouse.done)
+
+    assert mouse.done == [("move", 1, 2)]
+
+
+def test_touchpad_needs_a_paired_device(device, mouse):
+    with pytest.raises(WebSocketDisconnect) as closed, device.websocket_connect("/mouse", headers={"Authorization": "Bearer nope"}):
+        pass
+
+    assert closed.value.code == 1008
+    assert not mouse.done
+
+
+def test_touchpad_on_this_machine_needs_no_token(desktop, mouse):
+    with desktop.websocket_connect("/mouse") as ws:
+        ws.send_json({"type": "click", "button": "left"})
+        assert wait_until(lambda: mouse.done)
+
+    assert mouse.done == [("click", "left")]
+
+
+def test_touchpad_says_why_there_is_no_mouse(paired, mouse):
+    mouse.error = PermissionError(13, "Permission denied")
+
+    with paired.websocket_connect("/mouse") as ws, pytest.raises(WebSocketDisconnect) as closed:
+        ws.receive_json()
+
+    assert closed.value.code == 1011
+    assert closed.value.reason == "Can't control the mouse: Permission denied"
+

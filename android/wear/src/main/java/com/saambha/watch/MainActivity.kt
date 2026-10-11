@@ -20,6 +20,7 @@ import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
 import com.saambha.core.ConnectScreen
+import com.saambha.core.MouseActivity
 import com.saambha.core.Saambha
 import com.saambha.core.SaambhaClient
 import kotlin.concurrent.thread
@@ -27,6 +28,7 @@ import kotlin.concurrent.thread
 /**
  * Shows only a spinner while connecting (scan + pair if needed); pull down to retry if that fails.
  * Once connected it opens speech input, sends the words to saambha, and shows the reply.
+ * Mouse opens the touchpad.
  */
 class MainActivity : Activity() {
 
@@ -125,6 +127,10 @@ class MainActivity : Activity() {
                 addView(heard)
                 addView(reply)
                 addView(askButton)
+                addView(Button(context).apply {
+                    text = "Mouse"
+                    setOnClickListener { startActivity(Intent(context, MouseActivity::class.java)) }
+                })
             })
         }
 

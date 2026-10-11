@@ -1,5 +1,6 @@
 faster-whisper==1.2.1
 fastapi==0.135.1
 uvicorn==0.42.0
+websockets==17.1  # for uvicorn: the apps' touchpad (/mouse)
 python-multipart==0.0.22
 piper-tts==1.4.1

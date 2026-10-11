@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Saambha.Touchpad" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+        <!-- On the watch, sliding right would close the touchpad instead of moving the mouse. -->
+        <item name="android:windowSwipeToDismiss">false</item>
+    </style>
+</resources>
