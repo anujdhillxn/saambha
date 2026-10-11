@@ -58,6 +58,10 @@ class Settings:
     shutdown_wait: int  # seconds a stopping server gives open requests (like that wait) before cutting them off
     deny_cooldown: int  # seconds before a denied device can ask again
     aplay_bin: str
+    uinput_path: Path  # where the kernel makes virtual input devices: the apps' mouse is one
+    # The touchpad's moves are held back by as much as the network bunches them (see mouse.Pacer).
+    mouse_jitter_window: float  # seconds of recent moves that tell how much that is
+    mouse_max_delay: float  # seconds
     # Keeping a local (Ollama) model loaded, except while something heavy runs.
     ollama_url: str
     # scripts/install.sh sets this context window on "ollama/saambha-<model>" (made from "<model>").
@@ -115,6 +119,9 @@ class Settings:
             shutdown_wait=3,
             deny_cooldown=300,
             aplay_bin="aplay",
+            uinput_path=Path("/dev/uinput"),
+            mouse_jitter_window=1.0,
+            mouse_max_delay=0.15,
             ollama_url="http://127.0.0.1:11434",
             ollama_context=16384,
             heavy_check_interval=10,

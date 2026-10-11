@@ -1,19 +1,21 @@
 """The HTTP API, built by create_app() from the services it needs (see main.py for the real ones)."""
+import asyncio
 import logging
 import os
 import socket
 import tempfile
 from collections.abc import Callable
-from contextlib import asynccontextmanager
+from contextlib import AbstractContextManager, asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Protocol
 
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from saambha import history
+from saambha.mouse import Pacer
 from saambha.server.auth import bearer_token, is_local
 
 log = logging.getLogger(__name__)
@@ -62,6 +64,12 @@ class Transcriber(Protocol):
     def transcribe(self, audio_path: str) -> str: ...
 
 
+class Mouse(Protocol):
+    def move(self, dx: int, dy: int): ...
+    def click(self, button: str): ...
+    def scroll(self, notches: int): ...
+
+
 @dataclass
 class Services:
     assistant: Assistant
@@ -72,6 +80,8 @@ class Services:
     history: History
     log: Log
     transcriber: Transcriber
+    mouse: Callable[[], AbstractContextManager[Mouse]]  # a new mouse on the desktop, there while it's open
+    pacer: Callable[[], Pacer]  # one for each touchpad connection
     hostname: str = field(default_factory=socket.gethostname)
     on_startup: Callable[[], None] = lambda: None
     on_shutdown: Callable[[], None] = lambda: None
@@ -94,6 +104,18 @@ class CommandRequest(BaseModel):
 PUBLIC_PATHS = {"/discover", "/pair"}
 # Only for the desktop app on this machine: not even paired devices (they could allow others).
 DESKTOP_PATHS = "/desktop/"
+
+
+def move_mouse(mouse: Mouse, message: dict):
+    match message:
+        case {"type": "move", "dx": int(dx), "dy": int(dy)}:
+            mouse.move(dx, dy)
+        case {"type": "click", "button": "left" | "right" as button}:
+            mouse.click(button)
+        case {"type": "scroll", "notches": int(notches)}:
+            mouse.scroll(notches)
+        case _:
+            log.warning(f"MOUSE: ignored {message!r}")
 
 
 def create_app(services: Services) -> FastAPI:
@@ -239,6 +261,50 @@ def create_app(services: Services) -> FastAPI:
     async def desktop_stop_speech_endpoint():
         s.speaker.stop()
         return {"ok": True}
+
+    @app.websocket("/mouse")
+    async def mouse_endpoint(websocket: WebSocket):
+        """The apps' touchpad: moves, clicks and scrolls a mouse on the desktop while it's connected.
+
+        Each message says when it happened on the device ("t", in ms), so it's played at that pace.
+        """
+        ip = websocket.client.host if websocket.client else ""
+        if not (is_local(ip) or s.devices.is_valid(bearer_token(websocket.headers))):
+            await websocket.close(code=1008)  # the HTTP middleware doesn't see WebSockets
+            return
+        await websocket.accept()
+        loop = asyncio.get_running_loop()
+        pacer = s.pacer()
+        queue: asyncio.Queue[tuple[float, dict] | None] = asyncio.Queue()
+
+        async def receive():
+            try:
+                while True:
+                    message = await websocket.receive_json()
+                    happened = message.get("t") if isinstance(message, dict) else None
+                    arrived = loop.time()
+                    play_at = pacer.play_at(happened / 1000, arrived) if isinstance(happened, int | float) else arrived
+                    queue.put_nowait((play_at, message))
+            finally:
+                queue.put_nowait(None)  # what's left to play is played first
+
+        try:
+            with s.mouse() as mouse:
+                log.info(f"MOUSE: {ip} connected")
+                receiver = asyncio.create_task(receive())
+                try:
+                    while (item := await queue.get()) is not None:
+                        play_at, message = item
+                        await asyncio.sleep(play_at - loop.time())
+                        move_mouse(mouse, message)
+                    await receiver
+                finally:
+                    receiver.cancel()
+        except WebSocketDisconnect:
+            log.info(f"MOUSE: {ip} disconnected")
+        except OSError as e:
+            log.warning(f"MOUSE: can't make a mouse: {e}")
+            await websocket.close(code=1011, reason=f"Can't control the mouse: {e.strerror}")
 
     @app.get("/status")
     async def status_endpoint():

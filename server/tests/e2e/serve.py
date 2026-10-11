@@ -36,6 +36,7 @@ settings = dataclasses.replace(
     piper_voice="test-voice",
     piper_voices_dir=work,  # test-voice.onnx exists there, so nothing is downloaded
     aplay_bin=str(fakes / "aplay"),
+    uinput_path=work / "no-uinput",  # so the tests can't move the real mouse
 )
 uvicorn.run(create_app(build_services(settings)), host="127.0.0.1", port=settings.port, log_level="warning",
             ssl_keyfile=str(settings.key_file), ssl_certfile=str(settings.cert_file),

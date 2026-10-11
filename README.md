@@ -12,7 +12,7 @@ scripts/   setup (start.sh runs it), the HTTPS certificates, and the hotkey
 ## Setup
 
 ```bash
-./start.sh   # sets up whatever is missing (system packages, Python env, .env, certificates, what the harness needs, the desktop app), then starts Saambha
+./start.sh   # sets up whatever is missing (system packages, Python env, .env, certificates, mouse access, what the harness needs, the desktop app), then starts Saambha
 ```
 
 Saambha then runs in the background (the `saambha` and `saambha-desktop` systemd user services) and starts when you log in. A small microphone dot floats above your windows (drag it anywhere), grey while the local model is cold; clicking it opens the chat, with the detailed logs a button away.
@@ -47,6 +47,8 @@ adb install -r android/mobile/build/outputs/apk/debug/mobile-debug.apk   # or we
 ```
 
 The app finds the server on your Wi-Fi when it opens. The first time, click **Allow** in the popup that opens on the desktop. To unpair a device, remove it from `server/devices.json`.
+
+**Mouse** turns the screen into a touchpad for the desktop: slide to move, tap to click, hold (or tap with two fingers) to right-click, slide two fingers or turn the watch's crown to scroll.
 
 ## Skills
 

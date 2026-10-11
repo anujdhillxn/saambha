@@ -32,6 +32,7 @@ tasks.named("preBuild") { dependsOn(copyCa) }
 
 dependencies {
     api("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")  // the touchpad's WebSocket
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")  // the real one; android.jar only has stubs
 }

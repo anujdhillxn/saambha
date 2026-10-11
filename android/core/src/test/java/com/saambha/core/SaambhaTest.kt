@@ -1,5 +1,6 @@
 package com.saambha.core
 
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
@@ -26,7 +27,8 @@ class SaambhaTest {
     private val locator = FakeLocator(mapOf("192.168.0.14" to desktop))
     private val lan = FakeLocalNetwork()
     private val store = MemoryPairingStore()
-    private val saambha = Saambha(http, locator, lan, store, deviceName = "Pixel Watch 4", settings = Settings())
+    private val sockets = FakeWebSockets()
+    private val saambha = Saambha(http, locator, lan, store, sockets, deviceName = "Pixel Watch 4", settings = Settings())
 
     private fun pairedWith(server: Server, token: String = "old-token") {
         store.save(server, token)
@@ -185,5 +187,70 @@ class SaambhaTest {
         saambha.ask("hi", onStatus = { status += it })
 
         assertEquals(listOf("Searching the network…", "Approve on anuj-popos…"), status)
+    }
+
+    // openMouse()
+
+    @Test
+    fun `mouse - a WebSocket to the paired server that sends what the mouse does`() {
+        pairedWith(desktop)
+
+        saambha.openMouse(onClosed = {}).use { mouse ->
+            mouse.move(12, -3, timeMs = 1000)
+            mouse.click(MouseButton.RIGHT, timeMs = 1010)
+            mouse.scroll(-2, timeMs = 1020)
+        }
+
+        val socket = sockets.opened.single()
+        assertEquals("wss://192.168.0.14:8765/mouse", socket.url)
+        assertEquals("old-token", socket.token)
+        assertEquals(
+            listOf(
+                mapOf("type" to "move", "dx" to 12, "dy" to -3, "t" to 1000),
+                mapOf("type" to "click", "button" to "right", "t" to 1010),
+                mapOf("type" to "scroll", "notches" to -2, "t" to 1020),
+            ),
+            socket.sent.map { JSONObject(it).toMap() },
+        )
+    }
+
+    @Test
+    fun `mouse - pairs first if it has to`() {
+        saambha.openMouse(onClosed = {})
+
+        assertEquals("new-token", sockets.opened.single().token)
+    }
+
+    @Test
+    fun `mouse - keeps the network until it's closed`() {
+        pairedWith(desktop)
+
+        val mouse = saambha.openMouse(onClosed = {})
+        assertEquals(0, lan.closed)
+        mouse.close()
+
+        assertEquals(1, lan.closed)
+        assertTrue(sockets.opened.single().closed)
+    }
+
+    @Test
+    fun `mouse - no server lets go of the network`() {
+        locator.servers = emptyMap()
+
+        assertThrows(IOException::class.java) { saambha.openMouse(onClosed = {}) }
+
+        assertEquals(lan.acquired, lan.closed)
+        assertTrue(sockets.opened.isEmpty())
+    }
+
+    @Test
+    fun `mouse - hears why the server ended it`() {
+        pairedWith(desktop)
+        val reasons = mutableListOf<String>()
+
+        saambha.openMouse(onClosed = { reasons += it })
+        sockets.opened.single().onClosed("Can't control the mouse: Permission denied")
+
+        assertEquals(listOf("Can't control the mouse: Permission denied"), reasons)
     }
 }

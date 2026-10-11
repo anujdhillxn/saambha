@@ -64,3 +64,45 @@ class MemoryPairingStore(override var server: Server? = null, override var token
         token = null
     }
 }
+
+/** WebSockets that record what's sent; [close] stands in for the server or network ending one. */
+class FakeWebSockets : WebSocketClient {
+    inner class Socket(val url: String, val token: String?, val onClosed: (String) -> Unit) : WebSocketConnection {
+        val sent = mutableListOf<String>()
+        var closed = false
+
+        override fun send(text: String) {
+            sent += text
+        }
+
+        override fun close() {
+            closed = true
+        }
+    }
+
+    val opened = mutableListOf<Socket>()
+
+    override fun open(network: Network?, url: String, token: String?, onClosed: (String) -> Unit) =
+        Socket(url, token, onClosed).also { opened += it }
+}
+
+/** A Mouse that records what it's told, and when it happened. */
+class RecordingMouse : Mouse {
+    val done = mutableListOf<String>()
+    val times = mutableListOf<Long>()
+
+    override fun move(dx: Int, dy: Int, timeMs: Long) {
+        done += "move $dx $dy"
+        times += timeMs
+    }
+
+    override fun click(button: MouseButton, timeMs: Long) {
+        done += "click ${button.wire}"
+        times += timeMs
+    }
+
+    override fun scroll(notches: Int, timeMs: Long) {
+        done += "scroll $notches"
+        times += timeMs
+    }
+}
