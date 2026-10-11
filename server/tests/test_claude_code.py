@@ -24,6 +24,7 @@ def test_runs_in_the_workspace_with_model_and_system_prompt(claude, fakes, works
     args = call["args"]
     assert call["cwd"] == str(workspace)
     assert args[args.index("--model") + 1] == "test-model"
+    assert args[args.index("--effort") + 1] == "low"  # its least, for "off"
     assert args[args.index("--system-prompt") + 1] == SYSTEM_PROMPT.read_text().strip()
     assert args[args.index("--allowedTools") + 1:args.index("--allowedTools") + 3] == ["Bash", "Skill"]
 
@@ -64,6 +65,14 @@ def test_failed_resume_retries_with_a_new_session(claude, fakes):
     _, failed, retried = fakes.claude_calls()
     assert "--resume" in failed["args"]
     assert "--resume" not in retried["args"]
+    assert claude.sessions.load() == "sess-3"  # the new one, not the one that failed
+
+
+def test_a_failure_says_why(claude, fakes):
+    fakes.set("claude_mode", "fail")
+
+    assert claude.ask("hello") == "Sorry, something went wrong: Not logged in. Please run /login"
+    assert not claude.has_session()
 
 
 def test_hung_claude_is_killed_after_the_timeout(claude, fakes):
@@ -81,7 +90,7 @@ def test_hung_claude_is_killed_after_the_timeout(claude, fakes):
 
 def harness_in(workspace, skills_dir):
     return ClaudeCodeHarness(binary=FAKE_CLAUDE, workspace=workspace,
-                             system_prompt_file=workspace / "system-prompt.md", model="m",
+                             system_prompt_file=workspace / "system-prompt.md", model="m", effort="low",
                              sessions=SessionStore(workspace / "session_id", ttl=3600), timeout=5,
                              prompt_vars={}, skills_dir=skills_dir)
 

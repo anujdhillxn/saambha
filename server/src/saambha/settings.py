@@ -44,6 +44,8 @@ class Settings:
     pi_bin: str
     pi_model: str  # provider/model
     pi_session_dir: Path
+    # How hard the model thinks before it acts: "off", "low", "medium" or "high" (Claude Code's least is "low").
+    effort: str
     claude_bin: str
     claude_model: str
     piper_bin: str
@@ -99,6 +101,7 @@ class Settings:
             # "ollama/..." models run locally and are unloaded during heavy tasks.
             pi_model="anthropic/claude-haiku-5-5",
             pi_session_dir=home / ".local" / "share" / "saambha" / "pi-sessions",
+            effort="off",
             claude_bin=shutil.which("claude") or str(home / ".local" / "bin" / "claude"),
             claude_model="claude-haiku-5-5",
             # piper is installed in the venv; find it even when the venv isn't activated.

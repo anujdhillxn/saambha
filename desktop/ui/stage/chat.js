@@ -1,5 +1,4 @@
-// What the chat panel lists: the history as rows of times, commands and replies, and dividers
-// where new conversations start.
+// What the chat panel lists: the current conversation as rows of times, commands and replies.
 
 const RUN_GAP_S = 600; // exchanges this close together share one time
 
@@ -12,18 +11,13 @@ export function when(seconds, now = new Date()) {
 }
 
 /**
- * [kind, text] rows, kind being "when", "said", "reply" or "new" (a new conversation): a time
- * starts each run of exchanges.
+ * [kind, text] rows of the exchanges since a new conversation was last started, kind being "when",
+ * "said" or "reply": a time starts each run of exchanges.
  */
 export function rows(entries, now = new Date()) {
   const shown = [];
   let last = null;
-  for (const entry of entries) {
-    if (entry.new_conversation) {
-      shown.push(["new", "New conversation"]);
-      last = null;
-      continue;
-    }
+  for (const entry of entries.slice(entries.findLastIndex((e) => e.new_conversation) + 1)) {
     if (last === null || entry.time - last >= RUN_GAP_S) shown.push(["when", when(entry.time, now)]);
     shown.push(["said", entry.said], ["reply", entry.reply]);
     last = entry.time;

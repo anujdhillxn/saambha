@@ -70,13 +70,14 @@ function showChat(entries) {
   if (key === shownHistory) return;
   shownHistory = key;
   const chat = $("chat");
+  const shown = rows(entries);
   chat.replaceChildren();
-  if (!entries.length) {
+  if (!shown.length) {
     const empty = document.createElement("p");
     empty.className = "empty";
     empty.textContent = "Your commands and Saambha's replies show up here";
     chat.append(empty);
   }
-  chat.append(...rows(entries).map(([kind, text]) => row(kind, text)));
+  chat.append(...shown.map(([kind, text]) => row(kind, text)));
   chat.scrollTop = chat.scrollHeight;
 }

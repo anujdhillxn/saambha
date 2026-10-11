@@ -1,6 +1,7 @@
 import threading
 
 from conftest import PI_GUARD, SYSTEM_PROMPT
+from saambha.agent.pi import with_ollama_model
 
 
 def arg(call, flag):
@@ -16,12 +17,50 @@ def test_returns_the_reply_and_streams_events(pi):
     assert events == [("tool_use", "skill spotify"), ("text", "You said: play music")]
 
 
+def test_the_reply_is_the_last_word_not_what_it_said_on_the_way(pi, fakes):
+    fakes.set("pi_mode", "narrate")
+    events = []
+
+    reply = pi.ask("move the sound", on_event=lambda kind, detail: events.append((kind, detail)))
+
+    assert reply == "Switched it"
+    assert ("text", "I will set the default sink to 91.") in events  # shown as it works
+
+
+def test_ending_without_a_word_says_it_is_done(pi, fakes):
+    fakes.set("pi_mode", "narrate-mute")
+
+    assert pi.ask("move the sound") == "Done."
+
+
+def test_doing_nothing_at_all_isnt_called_done(pi, fakes):
+    fakes.set("pi_mode", "mute")
+
+    assert pi.ask("Play Tension") == "Sorry, I didn't get anywhere with that. Please try again."
+
+
 def test_other_tools_are_reported_by_name(pi, fakes):
     events = []
 
     pi.ask("what time is it", on_event=lambda kind, detail: events.append((kind, detail)))
 
     assert events == [("text", "You said: what time is it")]
+
+
+def test_an_ollama_model_is_added_to_pis_models_keeping_the_rest():
+    config = {"providers": {"anthropic": {"apiKey": "k"}, "ollama": {"models": [
+        {"id": "other:1b", "contextWindow": 4096}, {"id": "gemma:4b", "contextWindow": 4096}]}}}
+
+    updated = with_ollama_model(config, "http://127.0.0.1:11434/", "gemma:4b", 16384)
+
+    assert updated["providers"]["anthropic"] == {"apiKey": "k"}
+    ollama = updated["providers"]["ollama"]
+    assert ollama["baseUrl"] == "http://127.0.0.1:11434/v1" and ollama["api"] == "openai-completions"
+    assert ollama["models"] == [
+        {"id": "other:1b", "contextWindow": 4096},
+        {"id": "gemma:4b", "contextWindow": 16384, "reasoning": True, "thinkingLevelMap": {"off": "none"}},
+    ]
+    assert config["providers"]["ollama"]["models"][1] == {"id": "gemma:4b", "contextWindow": 4096}  # untouched
 
 
 def test_runs_in_the_workspace_with_prompt_skills_and_guard(pi, fakes, workspace, tmp_path):
@@ -31,6 +70,7 @@ def test_runs_in_the_workspace_with_prompt_skills_and_guard(pi, fakes, workspace
     assert call["cwd"] == str(workspace)
     assert arg(call, "--mode") == "json" and "--print" in call["args"]
     assert arg(call, "--model") == "anthropic/test-model"
+    assert arg(call, "--thinking") == "medium"
     assert arg(call, "--append-system-prompt") == SYSTEM_PROMPT.read_text().strip()
     assert arg(call, "--skill") == str(workspace / "skills")
     assert arg(call, "--extension") == str(PI_GUARD)

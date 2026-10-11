@@ -23,13 +23,14 @@ class Harness(ABC):
     name: str  # for logs, e.g. "pi"
     TIMEOUT_REPLY = "Sorry, that took too long. Please try again."
 
-    def __init__(self, binary: str, workspace: Path, system_prompt_file: Path, model: str,
+    def __init__(self, binary: str, workspace: Path, system_prompt_file: Path, model: str, effort: str,
                  sessions: SessionStore, timeout: float, prompt_vars: Mapping[str, str]):
         self.binary = binary
         self.workspace = workspace
         self.system_prompt_file = system_prompt_file
         self.prompt_vars = prompt_vars
         self.model = model
+        self.effort = effort  # "off", "low", "medium" or "high"
         self.sessions = sessions
         self.timeout = timeout
         # One command at a time: concurrent runs would write to the same session.

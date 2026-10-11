@@ -95,7 +95,11 @@ listen("dot-dropped", async ({ payload }) => {
 });
 listen("toggle-panel", () => (open ? closePanel() : openPanel()));
 addEventListener("pointerdown", (event) => {
-  if (open && !card.contains(event.target)) closePanel();
+  if (!open) return;
+  if (!card.contains(event.target)) closePanel();
+  // A window a command brought up can take the keyboard, and clicking a dock window doesn't take it
+  // back (X11): the panel asks for it again.
+  else takeInput();
 });
 addEventListener("keydown", (event) => event.key === "Escape" && closePanel());
 panel.wire(closePanel);

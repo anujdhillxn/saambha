@@ -136,18 +136,14 @@ setup_ollama() {  # $1: the model pi uses, e.g. saambha-gemma4:e4b
         rm "$modelfile"
     fi
     # Tell pi about it: provider "ollama" in ~/.pi/agent/models.json (other entries are kept).
-    python3 - "$model" "$OLLAMA_URL" "$OLLAMA_CONTEXT" <<'PY'
+    PYTHONPATH=src venv/bin/python - "$model" "$OLLAMA_URL" "$OLLAMA_CONTEXT" <<'PY'
 import json, sys
 from pathlib import Path
-model, url, context = sys.argv[1], sys.argv[2].rstrip("/"), int(sys.argv[3])
+from saambha.agent.pi import with_ollama_model
 path = Path.home() / ".pi" / "agent" / "models.json"
 config = json.loads(path.read_text()) if path.exists() else {}
-provider = config.setdefault("providers", {}).setdefault("ollama", {})
-provider.update(baseUrl=f"{url}/v1", api="openai-completions", apiKey="ollama")
-models = [m for m in provider.get("models", []) if m.get("id") != model]
-provider["models"] = models + [{"id": model, "contextWindow": context}]
 path.parent.mkdir(parents=True, exist_ok=True)
-path.write_text(json.dumps(config, indent=2) + "\n")
+path.write_text(json.dumps(with_ollama_model(config, sys.argv[2], sys.argv[1], int(sys.argv[3])), indent=2) + "\n")
 PY
     echo "ok"
 }

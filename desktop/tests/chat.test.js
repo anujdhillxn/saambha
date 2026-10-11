@@ -29,17 +29,20 @@ test("a time starts each run of exchanges", () => {
   ]);
 });
 
-test("a new conversation is a divider, and the next exchange shows its time", () => {
+test("only the conversation since a new one was last started", () => {
   const entries = [
+    { time: at(15, 1), said: "hello", reply: "Hi" },
+    { time: at(15, 2), new_conversation: true },
     { time: at(15, 5), said: "play music", reply: "Playing" },
     { time: at(15, 6), new_conversation: true },
     { time: at(15, 7), said: "louder", reply: "Done" },
   ];
 
-  assert.deepEqual(rows(entries, NOW), [
-    ["when", "15:05"], ["said", "play music"], ["reply", "Playing"],
-    ["new", "New conversation"], ["when", "15:07"], ["said", "louder"], ["reply", "Done"],
-  ]);
+  assert.deepEqual(rows(entries, NOW), [["when", "15:07"], ["said", "louder"], ["reply", "Done"]]);
+});
+
+test("nothing yet in a new conversation", () => {
+  assert.deepEqual(rows([{ time: at(15, 5), said: "hi", reply: "Hi" }, { time: at(15, 6), new_conversation: true }], NOW), []);
 });
 
 test("no rows yet", () => {
