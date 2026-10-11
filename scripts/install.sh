@@ -52,6 +52,14 @@ else
     echo "created from .env.sample: add your secrets and settings"
 fi
 
+step "Git hooks (the quick checks before each commit)"
+if [ "$(git -C .. config core.hooksPath)" = .githooks ]; then
+    echo "set"
+else
+    git -C .. config core.hooksPath .githooks
+    echo "set up"
+fi
+
 step "HTTPS certificates"
 ../scripts/gen_certs.sh .
 echo "ok"

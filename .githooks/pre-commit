@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Before each commit, the quick checks for the parts with staged changes (CI runs everything, Android
+# included). Skip once with `git commit --no-verify`.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+PATH="$HOME/.cargo/bin:$PATH"
+staged=$(git diff --cached --name-only --diff-filter=ACMRD)
+
+if grep -q '^server/' <<<"$staged"; then
+    (cd server && venv/bin/ruff check src tests && venv/bin/pytest -q -x --ignore=tests/e2e --ignore=tests/integration)
+fi
+if grep -q '^desktop/' <<<"$staged"; then
+    (cd desktop && cargo clippy --quiet --all-targets -- -D warnings && { out=$(node --test 2>&1) || { echo "$out"; exit 1; }; })
+fi
