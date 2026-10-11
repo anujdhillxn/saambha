@@ -64,9 +64,13 @@ class MainActivity : Activity() {
         handleLaunch(intent)
     }
 
-    /** The Quick Settings tile launches with EXTRA_LISTEN to go straight to speech input. */
+    /**
+     * Opened from the launcher or by voice ("Hey Google, open Saambha", or a routine doing that), or by the
+     * Quick Settings tile (with EXTRA_LISTEN): straight to speech input, as on the watch.
+     */
     private fun handleLaunch(intent: Intent?) {
-        if (intent?.getBooleanExtra(EXTRA_LISTEN, false) != true || busy) return
+        val launched = intent?.action == Intent.ACTION_MAIN && intent.hasCategory(Intent.CATEGORY_LAUNCHER)
+        if (!(launched || intent?.getBooleanExtra(EXTRA_LISTEN, false) == true) || busy) return
         if (connectScreen.connected) startListening() else listenWhenConnected = true
     }
 
