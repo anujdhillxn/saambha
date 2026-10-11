@@ -26,6 +26,7 @@ SAMPLE_SKILLS = Path(__file__).parent / "fixtures" / "skills"
 def pytest_addoption(parser):
     parser.addoption("--models", help="for models/: harness:model pairs to compare, comma-separated "
                                       "(default: the configured claude_model and pi_model)")
+    parser.addoption("--runs", type=int, default=3, help="for models/: how many times each task runs per model")
 
 
 class Fakes:
@@ -101,6 +102,7 @@ def claude(fakes, workspace, tmp_path) -> ClaudeCodeHarness:
         workspace=workspace,
         system_prompt_file=SYSTEM_PROMPT,
         model="test-model",
+        effort="off",
         sessions=SessionStore(tmp_path / "session_id", ttl=3600),
         timeout=5,
         prompt_vars={},
@@ -116,6 +118,7 @@ def pi(fakes, workspace, tmp_path) -> PiHarness:
         workspace=workspace,
         system_prompt_file=SYSTEM_PROMPT,
         model="anthropic/test-model",
+        effort="medium",
         sessions=SessionStore(tmp_path / "session_id", ttl=3600),
         timeout=5,
         prompt_vars={},

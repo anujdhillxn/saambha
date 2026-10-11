@@ -12,7 +12,7 @@ class EchoHarness(Harness):
     def __init__(self, tmp_path, **kwargs):
         prompt = tmp_path / "system-prompt.md"
         prompt.write_text("  Be brief.  \n")
-        super().__init__(binary="echo", workspace=tmp_path, system_prompt_file=prompt, model="m",
+        super().__init__(binary="echo", workspace=tmp_path, system_prompt_file=prompt, model="m", effort="off",
                          sessions=SessionStore(tmp_path / "session_id", ttl=3600), timeout=5,
                          prompt_vars=kwargs.get("prompt_vars", {}))
         self.running = 0

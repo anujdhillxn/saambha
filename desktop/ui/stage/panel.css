@@ -126,16 +126,6 @@ button.icon.primary:hover { background: var(--color-accent-hover); }
 }
 .reply { align-self: flex-start; background: var(--color-control); border-bottom-left-radius: 5px; }
 .said.pending { opacity: 0.6; } /* sent, not answered yet */
-.new {
-  display: flex;
-  align-items: center;
-  gap: var(--space-s);
-  margin-top: var(--space-s);
-  font-size: 11px;
-  color: var(--color-text-faint);
-}
-.new::before,
-.new::after { content: ""; flex: 1; border-top: 1px solid var(--color-border); }
 .empty { margin: auto; color: var(--color-text-faint); text-align: center; }
 
 footer {

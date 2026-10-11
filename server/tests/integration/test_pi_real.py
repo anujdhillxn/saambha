@@ -11,7 +11,7 @@ import pytest
 
 from conftest import PI_GUARD, SYSTEM_PROMPT
 from fakes.llm_server import start as start_fake_model
-from saambha.agent.pi import PiHarness
+from saambha.agent.pi import PiHarness, with_ollama_model
 from saambha.agent.sessions import SessionStore
 
 PI = shutil.which("pi") or str(Path.home() / ".local" / "bin" / "pi")
@@ -20,14 +20,13 @@ pytestmark = pytest.mark.skipif(not Path(PI).exists(), reason="pi isn't installe
 
 @pytest.fixture
 def model(fakes, tmp_path, monkeypatch):
-    """Points pi (via its own config dir) at the fake model server; returns its request log."""
+    """Points pi (via its own config dir) at the fake model server, set up as Saambha sets up an
+    Ollama model; returns its request log."""
     server = start_fake_model(fakes.state)
     agent_dir = tmp_path / "pi-agent"
     agent_dir.mkdir()
-    (agent_dir / "models.json").write_text(json.dumps({"providers": {"fake": {
-        "baseUrl": f"http://127.0.0.1:{server.server_address[1]}/v1",
-        "api": "openai-completions", "apiKey": "fake", "models": [{"id": "fake-model"}],
-    }}}))
+    (agent_dir / "models.json").write_text(json.dumps(
+        with_ollama_model({}, f"http://127.0.0.1:{server.server_address[1]}", "fake-model", 16384)))
     monkeypatch.setenv("PI_CODING_AGENT_DIR", str(agent_dir))
     monkeypatch.setenv("PI_OFFLINE", "1")
     yield lambda: [json.loads(line) for line in fakes.read("llm_requests.jsonl").splitlines()]
@@ -40,7 +39,8 @@ def pi(model, workspace, tmp_path):
         binary=PI,
         workspace=workspace,
         system_prompt_file=SYSTEM_PROMPT,
-        model="fake/fake-model",
+        model="ollama/fake-model",
+        effort="off",
         sessions=SessionStore(tmp_path / "session_id", ttl=3600),
         timeout=60,
         prompt_vars={},
@@ -56,6 +56,15 @@ def tool_results(request) -> list[str]:
 
 def test_reply(pi):
     assert pi.ask("hello") == "You said: hello"
+
+
+@pytest.mark.parametrize("effort, sent", [("off", "none"), ("high", "high")])
+def test_model_is_told_how_hard_to_think(pi, model, effort, sent):
+    pi.effort = effort
+
+    pi.ask("hello")
+
+    assert model()[0]["reasoning_effort"] == sent
 
 
 def test_model_gets_saambhas_prompt_and_the_skills(pi, model):

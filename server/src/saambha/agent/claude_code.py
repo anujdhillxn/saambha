@@ -17,9 +17,9 @@ log = logging.getLogger(__name__)
 class ClaudeCodeHarness(Harness):
     name = "claude"
 
-    def __init__(self, binary: str, workspace: Path, system_prompt_file: Path, model: str,
+    def __init__(self, binary: str, workspace: Path, system_prompt_file: Path, model: str, effort: str,
                  sessions: SessionStore, timeout: float, prompt_vars: Mapping[str, str], skills_dir: Path):
-        super().__init__(binary, workspace, system_prompt_file, model, sessions, timeout, prompt_vars)
+        super().__init__(binary, workspace, system_prompt_file, model, effort, sessions, timeout, prompt_vars)
         self.skills_dir = skills_dir
         self._link_skills()
 
@@ -37,19 +37,21 @@ class ClaudeCodeHarness(Harness):
 
     def _ask(self, text: str, on_event: EventHandler) -> str:
         session_id = self.sessions.load()
-        reply, ok = self._run_claude(text, session_id, on_event)
-        if not ok and session_id:
-            # e.g. the saved session no longer exists — start fresh rather than fail.
+        reply, error = self._run_claude(text, session_id, on_event)
+        if error and session_id:
+            # e.g. the saved session no longer exists (or is another harness's) — start fresh rather than fail.
             log.warning("Resume failed, retrying with a new session")
             self.sessions.clear()
-            reply, ok = self._run_claude(text, None, on_event)
-        return reply
+            reply, error = self._run_claude(text, None, on_event)
+        return f"Sorry, something went wrong: {error}" if error else reply
 
-    def _run_claude(self, text: str, session_id: str | None, on_event: EventHandler) -> tuple[str, bool]:
+    def _run_claude(self, text: str, session_id: str | None, on_event: EventHandler) -> tuple[str, str | None]:
+        """The reply, and why it failed if it did."""
         cmd = [
             self.binary, "-p", text,
             "--output-format", "stream-json",
             "--model", self.model,
+            "--effort", "low" if self.effort == "off" else self.effort,  # Claude Code can't turn it off
             "--allowedTools", "Bash", "Skill",
             "--system-prompt", self.system_prompt,
             "--verbose",
@@ -58,7 +60,7 @@ class ClaudeCodeHarness(Harness):
             log.info(f"Resuming session {session_id}")
             cmd.extend(["--resume", session_id])
 
-        state = {"reply": "", "got_result": False}
+        state = {"reply": "", "succeeded": False}
 
         def handle(event: dict):
             if event.get("type") == "assistant" and "message" in event:
@@ -75,8 +77,8 @@ class ClaudeCodeHarness(Harness):
                         if tool == "Skill":
                             tool = f"skill {block.get('input', {}).get('skill', '')}".strip()
                         on_event("tool_use", tool)
-            elif event.get("type") == "result":
-                state["got_result"] = True
+            elif event.get("type") == "result" and not event.get("is_error"):
+                state["succeeded"] = True
                 if result := event.get("result", "").strip():
                     state["reply"] = result
                 if sid := event.get("session_id"):
@@ -84,5 +86,9 @@ class ClaudeCodeHarness(Harness):
 
         run = self._run(cmd, handle)
         if run.timed_out:
-            return self.TIMEOUT_REPLY, True
-        return state["reply"], state["got_result"]
+            return self.TIMEOUT_REPLY, None
+        if state["succeeded"] and run.returncode == 0:
+            return state["reply"], None
+        # e.g. not logged in: claude says why on stderr
+        return "", next((line for line in run.stderr.splitlines() if line.strip()),
+                        f"claude exited with code {run.returncode}")

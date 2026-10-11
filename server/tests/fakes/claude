@@ -3,7 +3,8 @@
 
 Logs each call to $SAAMBHA_FAKES_STATE/claude_calls.jsonl. $SAAMBHA_FAKES_STATE/claude_mode:
   "hang"         never answers
-  "fail-resume"  exits with an error (no result) when asked to --resume
+  "fail"         fails every time, as when not logged in
+  "fail-resume"  when asked to --resume, fails as the real CLI does: an error result, then exit 1
 """
 import json
 import os
@@ -25,8 +26,14 @@ if mode == "hang":
     os.execvp("sleep", ["sleep", "300"])
 
 resume = args[args.index("--resume") + 1] if "--resume" in args else None
+if mode == "fail":
+    print(json.dumps({"type": "result", "subtype": "error_during_execution", "is_error": True, "result": ""}))
+    print("Not logged in. Please run /login", file=sys.stderr)
+    sys.exit(1)
 if resume and mode == "fail-resume":
-    print("No conversation found", file=sys.stderr)
+    print(json.dumps({"type": "result", "subtype": "error_during_execution", "is_error": True, "result": "",
+                      "session_id": resume}), flush=True)
+    print(f"No conversation found with session ID: {resume}", file=sys.stderr)
     sys.exit(1)
 
 prompt = args[args.index("-p") + 1]
