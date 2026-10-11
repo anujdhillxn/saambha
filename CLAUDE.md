@@ -19,6 +19,11 @@ Voice assistant for the Linux desktop. `server/` (Python, FastAPI) runs commands
 - `start.sh` runs `scripts/install.sh` every time, then (re)starts the services, so setup must stay idempotent and quick: each step checks before it acts, so it only installs what's missing, keeps what exists (`.env`, the CA, the venv) and applies changes. Before anything needs sudo, say why.
 - The README covers setup and usage only.
 
+## Workflow
+
+- Each change on its own branch, merged into `master` by a pull request once CI (`.github/workflows/ci.yml`) passes; `master` is protected, and PRs are squash-merged, so the PR's title and description become the commit. Merged branches are deleted.
+- `.githooks/pre-commit` runs the quick checks for what's staged (`start.sh` points git at it). CI runs the rest of "Before finishing" except the benchmarks, which need this machine.
+
 ## Before finishing
 
 ```bash

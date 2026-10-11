@@ -1,0 +1,65 @@
+# The checks from CLAUDE.md's "Before finishing" that run anywhere. The resource benchmarks (pytest -m bench,
+# desktop/bench) and the model benchmark (pytest -m models) need the desktop session, the models and a
+# Claude login, so they stay on the machine.
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: server/requirements*.txt
+      - run: python -m venv venv && venv/bin/pip install -q -r requirements-dev.txt
+      - run: venv/bin/ruff check src tests
+      - run: venv/bin/pytest
+
+  desktop:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libgtk-layer-shell0
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test
+      - run: node --test
+
+  android:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - name: A CA for the apps to bundle (each machine makes its own)
+        run: scripts/gen_certs.sh server
+      - run: ./gradlew :core:testDebugUnitTest
+        working-directory: android
