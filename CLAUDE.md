@@ -6,6 +6,7 @@ Voice assistant for the Linux desktop. `server/` (Python, FastAPI) runs commands
 
 - Only necessary code. No dead code, no handling for situations that can't happen, no settings or options nobody asked for.
 - When a change makes something obsolete (code, tests, settings, comments, docs), delete it in the same change. Clean up stale comments and dead code you come across as you go.
+- Keep the folder structure clean too: each file in the folder its component and kind belong in, nothing stray at the root, no scratch files, one-off scripts or generated output left behind, and no folder kept once a change empties it or makes it obsolete. A file needed in two places is a symlink, not a copy (`AGENTS.md` links to this file).
 - Comments only where the code can't speak for itself: say why, not what. No comments that restate the code or narrate history ("now", "used to", "new").
 
 ## Conventions
