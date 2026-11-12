@@ -10,5 +10,5 @@ if grep -q '^server/' <<<"$staged"; then
     (cd server && venv/bin/ruff check src tests && venv/bin/pytest -q -x --ignore=tests/e2e --ignore=tests/integration)
 fi
 if grep -q '^desktop/' <<<"$staged"; then
-    (cd desktop && cargo clippy --quiet --all-targets -- -D warnings && { out=$(node --test 2>&1) || { echo "$out"; exit 1; }; })
+    (cd desktop && cargo clippy --quiet --all-targets -- -D warnings)
 fi

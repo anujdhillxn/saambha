@@ -1,0 +1,128 @@
+/* The chat panel and the log window. The colours come from theme.rs. */
+
+window.overlay {
+  background: none;
+}
+
+.card {
+  background-color: @surface;
+  border: 1px solid @border;
+  border-radius: 18px;
+  box-shadow: 0 10px 30px @shadow;
+  color: @text;
+  font-size: 13px;
+}
+
+.header {
+  padding: 16px 12px 8px 16px;
+}
+.light {
+  min-width: 9px;
+  min-height: 9px;
+  border-radius: 50%;
+  transition: background-color 500ms, box-shadow 500ms;
+}
+.light.ready { background-color: @ready; box-shadow: 0 0 8px @ready; }
+.light.cold { background-color: @cold; box-shadow: 0 0 8px @cold; }
+.light.listening { background-color: @listening; box-shadow: 0 0 8px @listening; }
+.light.working { background-color: @working; box-shadow: 0 0 8px @working; }
+.light.asking { background-color: @asking; box-shadow: 0 0 8px @asking; }
+.title {
+  font-size: 15px;
+  font-weight: 600;
+}
+.line {
+  font-size: 12px;
+  color: @text_muted;
+}
+
+.card button {
+  min-width: 0;
+  min-height: 0;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 9px;
+  background: @control;
+  box-shadow: none;
+  color: inherit;
+  text-shadow: none;
+  outline: none;
+  transition: background-color 150ms;
+}
+.card button:hover { background: @control_hover; }
+.card button.primary { background: @accent; color: @on_accent; }
+.card button.primary:hover { background: @accent_hover; }
+.card button.icon { padding: 6px; background: none; }
+.card button.icon:hover { background: @control; }
+.card button.icon.primary { padding: 8px; background: @accent; }
+.card button.icon.primary:hover { background: @accent_hover; }
+
+.pairing {
+  margin: 0 12px 8px;
+  padding: 8px 8px 8px 12px;
+  border-radius: 12px;
+  background-color: alpha(@asking, 0.14);
+}
+
+.card scrolledwindow undershoot.top,
+.card scrolledwindow undershoot.bottom {
+  background: none;
+}
+.card scrollbar slider {
+  min-width: 6px;
+  background-color: @control_hover;
+}
+.chat {
+  padding: 4px 16px 8px;
+}
+.when {
+  margin-top: 8px;
+  font-size: 11px;
+  color: @text_faint;
+}
+.said,
+.reply {
+  padding: 8px 12px;
+  animation: rise 250ms ease-out;
+}
+.said {
+  border-radius: 16px 16px 5px 16px;
+  background-color: @accent;
+  color: @on_accent;
+}
+.reply {
+  border-radius: 16px 16px 16px 5px;
+  background-color: @control;
+}
+.said.pending { opacity: 0.6; } /* sent, not answered yet */
+.empty { color: @text_faint; }
+
+.footer {
+  padding: 8px 12px 12px;
+  border-top: 1px solid @border;
+}
+.card entry {
+  min-height: 0;
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: @control;
+  box-shadow: none;
+  outline: none;
+  color: inherit;
+  transition: border-color 150ms;
+}
+.card entry:focus-within { border-color: @accent; }
+.card entry > text > placeholder { color: @text_faint; }
+
+textview.log,
+textview.log > text {
+  background-color: @surface_deep;
+  color: @text;
+  font-size: 12px;
+}
+
+@keyframes rise {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

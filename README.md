@@ -4,7 +4,7 @@ Voice-controlled Linux desktop assistant. Speak a command, an AI agent executes 
 
 ```
 server/    the desktop server (Python): src/saambha, tests, and the agent's workspace (system-prompt.md)
-desktop/   the dot and chat panel on the desktop (Tauri)
+desktop/   the dot and chat panel on the desktop (Rust, GTK 4)
 android/   the phone and watch apps (Kotlin): core, mobile, wear
 scripts/   setup (start.sh runs it), the HTTPS certificates, and the hotkey
 ```
@@ -60,6 +60,6 @@ Rules that apply to every request go in `server/system-prompt.md`.
 
 ```bash
 cd server && venv/bin/pip install -r requirements-dev.txt && venv/bin/ruff check src tests && venv/bin/pytest
-cd desktop && cargo test && node --test
+cd desktop && cargo test
 cd android && ./gradlew :core:testDebugUnitTest
 ```

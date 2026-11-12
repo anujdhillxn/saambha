@@ -2,88 +2,41 @@
 //! doing, and the chat panel that grows out of it. It runs alongside the Saambha server:
 //!     saambha-desktop <server url> <the server's CA file>
 
+mod chat;
+mod desktop;
+mod dot;
+mod icon;
 mod layer_shell;
+mod layout;
+mod logs;
+mod motion;
 mod overlay;
+mod panel;
+mod saved;
 mod server;
+mod status;
+mod theme;
+mod x11;
 
+use std::cell::RefCell;
 use std::os::unix::process::CommandExt;
+use std::path::PathBuf;
+use std::rc::Rc;
 
-use reqwest::Method;
-use serde_json::{Value, json};
-use server::Server;
-use tauri::{AppHandle, Manager, State, WebviewUrl, WebviewWindow};
+use gtk::prelude::*;
+use gtk::{gdk, gio, glib};
 
-// What the windows ask the server.
+use crate::desktop::Desktop;
+use crate::saved::SavedPlace;
+use crate::server::Server;
 
-/// What Saambha is doing; with [after] (a version of it), once that's changed.
-#[tauri::command]
-async fn status(server: State<'_, Server>, after: Option<u64>) -> Result<Value, String> {
-    match after {
-        None => server.call(Method::GET, "/desktop/status", None).await,
-        Some(version) => server.call_slow(Method::GET, &format!("/desktop/status?after={version}"), None).await,
+fn main() -> glib::ExitCode {
+    // Drawn on the CPU: its few small changes cost about the same as on the GPU, and the GPU's
+    // drivers would take a third of its memory.
+    if std::env::var_os("GSK_RENDERER").is_none() {
+        // SAFETY: no other threads yet.
+        unsafe { std::env::set_var("GSK_RENDERER", "cairo") };
     }
-}
-
-#[tauri::command]
-async fn history(server: State<'_, Server>, limit: u32) -> Result<Value, String> {
-    server.call(Method::GET, &format!("/desktop/history?limit={limit}"), None).await
-}
-
-#[tauri::command]
-async fn log(server: State<'_, Server>, offset: Option<u64>) -> Result<Value, String> {
-    let query = offset.map(|o| format!("?offset={o}")).unwrap_or_default();
-    server.call(Method::GET, &format!("/desktop/log{query}"), None).await
-}
-
-#[tauri::command]
-async fn answer_pairing(server: State<'_, Server>, allow: bool) -> Result<Value, String> {
-    server.call(Method::POST, "/desktop/pairing", Some(json!({ "allow": allow }))).await
-}
-
-#[tauri::command]
-async fn stop_speaking(server: State<'_, Server>) -> Result<Value, String> {
-    server.call(Method::POST, "/desktop/speech/stop", None).await
-}
-
-/// Runs [text] as a command; the reply shows in the history (it isn't spoken).
-#[tauri::command]
-async fn send_command(server: State<'_, Server>, text: String) -> Result<Value, String> {
-    server.call_slow(Method::POST, "/command", Some(json!({ "text": text, "speak": "none" }))).await
-}
-
-#[tauri::command]
-async fn new_conversation(server: State<'_, Server>) -> Result<Value, String> {
-    server.call(Method::POST, "/reset", None).await
-}
-
-/// Puts the dot [margins] (left, top, right, bottom) from the stage's edges, and shows it.
-#[tauri::command]
-fn place_dot(app: AppHandle, margins: overlay::Margins) -> Result<(), String> {
-    let dot = app.get_webview_window("dot").ok_or("no dot window")?;
-    overlay::place_dot(&dot.gtk_window().map_err(|e| e.to_string())?, margins);
-    dot.show().map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn set_input(window: WebviewWindow, parts: Vec<overlay::Rect>, keyboard: bool) -> Result<(), String> {
-    overlay::set_input(&window.gtk_window().map_err(|e| e.to_string())?, &parts, keyboard);
-    Ok(())
-}
-
-#[tauri::command]
-fn open_logs(app: AppHandle) -> Result<(), String> {
-    if let Some(logs) = app.get_webview_window("logs") {
-        return logs.set_focus().map_err(|e| e.to_string());
-    }
-    tauri::WebviewWindowBuilder::new(&app, "logs", WebviewUrl::App("logs/index.html".into()))
-        .title("Saambha logs")
-        .inner_size(1100.0, 650.0)
-        .build()
-        .map(|_| ())
-        .map_err(|e| e.to_string())
-}
-
-fn main() {
     if overlay::needs_x11() {
         let error = std::process::Command::new(std::env::current_exe().expect("this program's path"))
             .args(std::env::args_os().skip(1))
@@ -94,37 +47,44 @@ fn main() {
     }
 
     let args: Vec<String> = std::env::args().collect();
-    let [_, url, ca_file] = args.as_slice() else {
+    let [program, url, ca_file] = args.as_slice() else {
         eprintln!("Usage: saambha-desktop <server url> <the server's CA file>");
         std::process::exit(2);
     };
-    let server = Server::new(url, ca_file).unwrap_or_else(|e| {
+    // The server's requests run here; one thread is plenty for a few at a time.
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(1)
+        .enable_all()
+        .build()
+        .expect("a runtime for the server's requests");
+    let server = Server::new(url, ca_file, runtime.handle().clone()).unwrap_or_else(|e| {
         eprintln!("{e}");
         std::process::exit(1);
     });
+    let state_dir = std::env::var_os("XDG_STATE_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| glib::home_dir().join(".local/state"));
+    let saved = state_dir.join("saambha").join("dot.json");
 
-    tauri::Builder::default()
-        .manage(server)
-        .invoke_handler(tauri::generate_handler![
-            status,
-            history,
-            log,
-            answer_pairing,
-            stop_speaking,
-            send_command,
-            new_conversation,
-            place_dot,
-            set_input,
-            open_logs,
-        ])
-        .setup(|app| {
-            let stage = app.get_webview_window("stage").expect("the stage window");
-            let dot = app.get_webview_window("dot").expect("the dot window");
-            overlay::make_stage(&stage.gtk_window()?);
-            overlay::make_dot(&dot.gtk_window()?);
-            stage.show()?; // the stage then puts the dot where it goes, and shows it
-            Ok(())
-        })
-        .run(tauri::generate_context!())
-        .expect("the desktop app failed");
+    let app = gtk::Application::builder()
+        .application_id("dev.saambha.desktop")
+        .flags(gio::ApplicationFlags::NON_UNIQUE)
+        .build();
+    app.connect_startup(|_| style());
+    let desktop = Rc::new(RefCell::new(None)); // held while the app runs
+    app.connect_activate(move |app| {
+        let started = Desktop::start(app, server.clone(), SavedPlace::new(saved.clone()));
+        desktop.replace(Some(started));
+    });
+    app.run_with_args(&[program])
+}
+
+fn style() {
+    let display = gdk::Display::default().expect("a display");
+    let settings = gtk::Settings::for_display(&display);
+    settings.set_gtk_theme_name(Some("Adwaita")); // the same look on every desktop
+    settings.set_gtk_application_prefer_dark_theme(true);
+    let provider = gtk::CssProvider::new();
+    provider.load_from_string(&theme::stylesheet());
+    gtk::style_context_add_provider_for_display(&display, &provider, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
 }
