@@ -39,9 +39,10 @@ pub struct DotView {
 }
 
 impl DotView {
-    pub fn new(look: Look) -> Self {
+    /// A dot showing [look]; [away] if it starts faded away.
+    pub fn new(look: Look, away: bool) -> Self {
         let area = gtk::DrawingArea::builder().content_width(BOX).content_height(BOX).build();
-        let dot = Rc::new(RefCell::new(Dot::new(look)));
+        let dot = Rc::new(RefCell::new(Dot::new(look, away)));
         area.set_draw_func({
             let dot = dot.clone();
             move |_, cr, width, height| dot.borrow().draw(cr, f64::from(width) / 2.0, f64::from(height) / 2.0, clock())
@@ -142,7 +143,7 @@ struct Dot {
 }
 
 impl Dot {
-    fn new(look: Look) -> Self {
+    fn new(look: Look, away: bool) -> Self {
         let color = theme::state(look.state);
         Dot {
             look,
@@ -154,7 +155,7 @@ impl Dot {
             color: Tween::still(1.0),
             hover: Tween::still(0.0),
             scale: Tween::still(1.0),
-            opacity: Tween::still(1.0),
+            opacity: Tween::still(if away { 0.0 } else { 1.0 }),
             ticking: None,
         }
     }

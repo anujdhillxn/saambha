@@ -45,17 +45,32 @@ pub fn place_dot(screen: Size, saved: Option<Point>, size: i32, edge: i32, margi
 }
 
 /// The panel, from the dot toward the middle of the screen, [gap] away: above it when the dot is in
-/// the bottom half, and lined up with its right edge when in the right half.
+/// the bottom half, and lined up with its right edge when in the right half. Where it can't fit
+/// above or below, it's beside the dot instead, lined up with its bottom (or top): it never covers
+/// the dot.
 pub fn place_panel(screen: Size, dot: Rect, size: Size, gap: i32, margin: i32) -> Panel {
     let up = 2 * dot.y + dot.height > screen.height;
     let from_right = 2 * dot.x + dot.width > screen.width;
-    let rect = Rect {
-        x: if from_right { dot.x + dot.width - size.width } else { dot.x },
-        y: if up { dot.y - gap - size.height } else { dot.y + dot.height + gap },
-        width: size.width,
-        height: size.height,
-    };
-    Panel { rect: keep_on(screen, rect, margin), up, from_right }
+    let (width, height) = (size.width, size.height);
+    let mut rect = keep_on(screen, Rect {
+        x: if from_right { dot.x + dot.width - width } else { dot.x },
+        y: if up { dot.y - gap - height } else { dot.y + dot.height + gap },
+        width,
+        height,
+    }, margin);
+    if overlap(rect, dot) {
+        rect = keep_on(screen, Rect {
+            x: if from_right { dot.x - gap - width } else { dot.x + dot.width + gap },
+            y: if up { dot.y + dot.height - height } else { dot.y },
+            width,
+            height,
+        }, margin);
+    }
+    Panel { rect, up, from_right }
+}
+
+fn overlap(a: Rect, b: Rect) -> bool {
+    a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height
 }
 
 #[cfg(test)]
@@ -109,9 +124,22 @@ mod tests {
     }
 
     #[test]
-    fn the_panel_stays_on_screen_beside_a_dot_halfway_down() {
-        let panel = place_panel(SCREEN, Rect { x: 30, y: 600, width: 40, height: 40 }, PANEL, 12, 8);
+    fn beside_a_dot_low_enough_the_panels_bottom_lines_up_with_the_dots() {
+        let dot = Rect { x: 30, y: 720, width: 40, height: 40 };
 
+        let panel = place_panel(SCREEN, dot, PANEL, 12, 8);
+
+        assert_eq!((panel.rect.x, panel.rect.y + panel.rect.height), (82, 760));
+    }
+
+    #[test]
+    fn the_panel_opens_beside_a_dot_halfway_down_where_it_cant_fit_above_or_below() {
+        let dot = Rect { x: 30, y: 600, width: 40, height: 40 };
+
+        let panel = place_panel(SCREEN, dot, PANEL, 12, 8);
+
+        assert_eq!(panel.rect.x, 30 + 40 + 12); // right of it, toward the middle
+        assert!(!overlap(panel.rect, dot));
         assert_eq!(keep_on(SCREEN, panel.rect, 8), panel.rect);
     }
 }

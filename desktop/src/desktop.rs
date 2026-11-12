@@ -69,10 +69,11 @@ impl Desktop {
     /// Puts the dot and its stage on the screen.
     pub fn start(app: &gtk::Application, server: Server, saved: SavedPlace) -> Rc<Self> {
         let look = Look { state: Status::offline().state, speaking: false };
-        let dot = DotView::new(look);
+        let dot = DotView::new(look, false);
         let dot_window = overlay_window(app, dot.widget(), Some((dot::BOX, dot::BOX)));
-        let dragged = DotView::new(look);
-        dragged.widget().set_visible(false);
+        // Faded away, not hidden, while it isn't dragged: GTK doesn't draw a window with nothing in
+        // it, which would leave the panel's last frame on the screen as it's put away.
+        let dragged = DotView::new(look, true);
         dragged.widget().set_can_target(false);
         let fixed = gtk::Fixed::new();
         fixed.put(dragged.widget(), 0.0, 0.0);
@@ -149,17 +150,18 @@ impl Desktop {
             };
             d.dragged_by(dx, dy, first);
         }));
-        drag.connect_drag_end(glib::clone!(#[weak(rename_to = d)] self, move |_, _, _| {
+        drag.connect_drag_end(glib::clone!(#[weak(rename_to = d)] self, move |_, dx, dy| {
             let Some(press) = d.state.borrow_mut().press.take() else { return };
             d.dot.set_pressed(false);
             d.hover(d.dot.hovered());
-            match press.moved {
-                Some((dx, dy)) => d.dropped(dx, dy),
-                None if d.dot.look().speaking => {
-                    let server = d.server.clone();
-                    glib::spawn_future_local(async move { server.stop_speaking().await });
-                }
-                None => d.toggle_panel(),
+            // Where it's let go, which can be further than the last move GTK passed on.
+            if press.moved.is_some() || dx.hypot(dy) >= DRAG_FROM {
+                d.dropped(dx, dy);
+            } else if d.dot.look().speaking {
+                let server = d.server.clone();
+                glib::spawn_future_local(async move { server.stop_speaking().await });
+            } else {
+                d.toggle_panel();
             }
         }));
         drag.connect_cancel(glib::clone!(#[weak(rename_to = d)] self, move |_, _| {
@@ -358,8 +360,7 @@ impl Desktop {
             .translate(&graphene::Point::new(-origin.x(), -origin.y()));
         self.fixed.set_child_transform(self.panel.widget(), Some(&transform));
         self.panel.widget().set_opacity(state.fade.value(now));
-        let moving = !state.grow.done(now) || !state.fade.done(now);
-        if !moving && !state.open {
+        let moving = !state.grow.done(now) || !state.fade.done(now);        if !moving && !state.open {
             self.panel.widget().set_visible(false);
         }
         moving
@@ -387,7 +388,7 @@ impl Desktop {
         let rect = self.dragged_to(dx, dy);
         self.dragged.set_look(self.dot.look());
         self.fixed.move_(self.dragged.widget(), f64::from(rect.x), f64::from(rect.y));
-        self.dragged.widget().set_visible(true);
+        self.dragged.set_away(false);
     }
 
     fn dropped(self: &Rc<Self>, dx: f64, dy: f64) {
@@ -397,7 +398,7 @@ impl Desktop {
         self.dot.set_away(false);
         let settling = glib::timeout_add_local_once(SETTLE, glib::clone!(#[weak(rename_to = d)] self, move || {
             d.state.borrow_mut().settling = None;
-            d.dragged.widget().set_visible(false);
+            d.dragged.set_away(true);
         }));
         let mut state = self.state.borrow_mut();
         state.drag_from = None;
