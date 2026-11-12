@@ -52,3 +52,23 @@ def test_nothing_to_mark_a_new_conversation_after(tmp_path, clock):
     history.start_conversation()
 
     assert history.recent(10) == []
+
+
+def test_an_entry_a_crash_left_padded_with_nothing_is_read(tmp_path, clock):
+    path = tmp_path / "history.jsonl"
+    history = ChatHistory(path, clock)
+    history.add("play music", "Playing")
+    path.write_text("\0" * 125 + path.read_text())
+
+    assert history.recent(10) == [Exchange(clock.now, "play music", "Playing")]
+
+
+def test_a_line_that_cant_be_read_is_left_out(tmp_path, clock):
+    path = tmp_path / "history.jsonl"
+    history = ChatHistory(path, clock)
+    history.add("play music", "Playing")
+    with path.open("a") as f:
+        f.write('{"time": 1, "sa\n')
+    history.add("louder", "Done")
+
+    assert [e.said for e in history.recent(10)] == ["play music", "louder"]
