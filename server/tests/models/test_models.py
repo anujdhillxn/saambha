@@ -22,6 +22,8 @@ from pathlib import Path
 
 import pytest
 
+from models.conftest import LONG_REPLY
+
 pytestmark = pytest.mark.models
 
 LUCKY = Path(__file__).parent / "skills" / "lucky-number" / "lucky.py"
@@ -125,6 +127,19 @@ def test_arithmetic(agent):
     reply = agent.ask("What is 17 times 23?")
 
     assert 391 in numbers(reply), reply
+
+
+def test_a_big_question_gets_the_gist_and_the_rest_in_the_details(agent):
+    reply = agent.ask("What's the difference between git merge and git rebase?")
+
+    assert len(reply.split()) <= LONG_REPLY, reply
+    assert "rebase" in agent.replies[-1].details.lower(), agent.replies[-1]
+
+
+def test_a_failure_in_a_sentence(agent):
+    reply = agent.ask("Open the zorblaxify app.")
+
+    assert len(reply.split()) <= LONG_REPLY, reply
 
 
 def test_follow_up(agent):

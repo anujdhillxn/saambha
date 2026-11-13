@@ -15,7 +15,8 @@ log = logging.getLogger(__name__)
 class Exchange:
     time: float
     said: str
-    reply: str
+    reply: str  # what was spoken
+    details: str = ""  # only shown in the chat
 
 
 @dataclass(frozen=True)
@@ -40,8 +41,8 @@ class ChatHistory:
         self.path = path
         self.clock = clock
 
-    def add(self, said: str, reply: str):
-        self._write(Exchange(self.clock(), said, reply))
+    def add(self, said: str, reply: str, details: str):
+        self._write(Exchange(self.clock(), said, reply, details))
 
     def start_conversation(self):
         """Marks a new conversation, after the last exchange (if any, and if not marked already)."""

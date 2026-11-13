@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 from saambha import history
 from saambha.mouse import Pacer
+from saambha.reply import parse
 from saambha.server.auth import bearer_token, is_local
 
 log = logging.getLogger(__name__)
@@ -51,7 +52,7 @@ class Status(Protocol):
 
 
 class History(Protocol):
-    def add(self, said: str, reply: str): ...
+    def add(self, said: str, reply: str, details: str): ...
     def start_conversation(self): ...
     def recent(self, limit: int) -> list: ...
 
@@ -143,12 +144,13 @@ def create_app(services: Services) -> FastAPI:
         try:
             response_text = s.assistant.ask(text, on_event=on_event)
             log.info(f"RESPONSE: {response_text!r}")
-            s.history.add(text, response_text)  # before the change that tells the panel to show it
+            reply = parse(response_text)
+            s.history.add(text, reply.summary, reply.details)  # before the change that tells the panel to show it
         finally:
             s.status.set_task(None)
-        if response_text and speak_on_desktop:
-            s.speaker.speak(response_text)
-        return {"input": text, "text": response_text}
+        if reply.summary and speak_on_desktop:
+            s.speaker.speak(reply.summary)
+        return {"input": text, "text": reply.summary}
 
     @app.middleware("http")
     async def require_paired_device(request: Request, call_next):

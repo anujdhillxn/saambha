@@ -14,6 +14,8 @@ pub struct Entry {
     #[serde(default)]
     pub reply: String,
     #[serde(default)]
+    pub details: String,
+    #[serde(default)]
     pub new_conversation: bool,
 }
 
@@ -22,6 +24,7 @@ pub enum Row {
     When(String),
     Said(String),
     Reply(String),
+    Details(String),
 }
 
 /// When something was said, in [now]'s time zone: the time today, else the date too.
@@ -44,6 +47,9 @@ pub fn rows(entries: &[Entry], now: &DateTime) -> Vec<Row> {
         }
         rows.push(Row::Said(entry.said.clone()));
         rows.push(Row::Reply(entry.reply.clone()));
+        if !entry.details.is_empty() {
+            rows.push(Row::Details(entry.details.clone()));
+        }
         last = Some(entry.time);
     }
     rows
@@ -64,11 +70,11 @@ mod tests {
     }
 
     fn exchange(time: f64, said: &str, reply: &str) -> Entry {
-        Entry { time, said: said.into(), reply: reply.into(), new_conversation: false }
+        Entry { time, said: said.into(), reply: reply.into(), details: String::new(), new_conversation: false }
     }
 
     fn new_conversation(time: f64) -> Entry {
-        Entry { time, said: String::new(), reply: String::new(), new_conversation: true }
+        Entry { time, said: String::new(), reply: String::new(), details: String::new(), new_conversation: true }
     }
 
     #[test]
@@ -93,6 +99,16 @@ mod tests {
             Row::When("15:05".into()), Row::Said("play music".into()), Row::Reply("Playing".into()),
             Row::Said("louder".into()), Row::Reply("Done".into()),
             Row::When("16:04".into()), Row::Said("what time is it".into()), Row::Reply("4:04".into()),
+        ]);
+    }
+
+    #[test]
+    fn details_follow_their_reply() {
+        let entries = [Entry { details: "Merge adds a commit.".into(), ..exchange(at(15, 5, 10), "merge or rebase", "Merge keeps both.") }];
+
+        assert_eq!(rows(&entries, &now()), [
+            Row::When("15:05".into()), Row::Said("merge or rebase".into()), Row::Reply("Merge keeps both.".into()),
+            Row::Details("Merge adds a commit.".into()),
         ]);
     }
 
