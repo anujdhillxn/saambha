@@ -21,7 +21,7 @@ const TRIES = 8; // windows, for that many idle ones
 // Budgets, a little lenient.
 const CPU = 0.01; // of one core
 const WAKEUPS = 20; // a second
-const MEMORY_MB = 80;
+const MEMORY_MB = 25;
 
 const TICKS_PER_S = 100; // USER_HZ, the unit of /proc/<pid>/stat's CPU times
 

@@ -31,11 +31,14 @@ use crate::saved::SavedPlace;
 use crate::server::Server;
 
 fn main() -> glib::ExitCode {
-    // Drawn on the CPU: its few small changes cost about the same as on the GPU, and the GPU's
-    // drivers would take a third of its memory.
-    if std::env::var_os("GSK_RENDERER").is_none() {
-        // SAFETY: no other threads yet.
-        unsafe { std::env::set_var("GSK_RENDERER", "cairo") };
+    // Drawn on the CPU: its few small changes cost about the same as on the GPU. GDK would still
+    // set up GL, loading drivers that take two thirds of its memory, unless told not to (by
+    // GDK_DEBUG before GTK 4.16, GDK_DISABLE after).
+    for (name, value) in [("GSK_RENDERER", "cairo"), ("GDK_DEBUG", "gl-disable"), ("GDK_DISABLE", "gl")] {
+        if std::env::var_os(name).is_none() {
+            // SAFETY: no other threads yet.
+            unsafe { std::env::set_var(name, value) };
+        }
     }
     if overlay::needs_x11() {
         let error = std::process::Command::new(std::env::current_exe().expect("this program's path"))
