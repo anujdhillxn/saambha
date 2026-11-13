@@ -15,7 +15,7 @@ scripts/   setup (start.sh runs it), the HTTPS certificates, and the hotkey
 ./start.sh   # sets up whatever is missing (system packages, .env, certificates, mouse access, the app, speech, what the harness needs), then starts Saambha
 ```
 
-Saambha then runs in the background (the `saambha` systemd user service) and starts when you log in. A small microphone dot floats above your windows (drag it anywhere), grey while the local model is cold; clicking it opens the chat, with the detailed logs a button away.
+Saambha then runs in the background (the `saambha` systemd user service) and starts when you log in. A small dot floats above your windows (drag it anywhere), the mascot in it posed as what Saambha is doing, grey while the local model is cold; clicking it opens the chat, with the detailed logs a button away.
 
 Put secrets and your settings in `desktop/.env` (see `desktop/.env.sample`). Any setting in `desktop/src/server/settings.rs` can be overridden there as `SAAMBHA_<NAME>`. After changing them, run `./start.sh` again. To run it in a terminal instead: `systemctl --user stop saambha`, then `desktop/target/release/saambha`.
 

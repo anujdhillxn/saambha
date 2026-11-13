@@ -10,6 +10,7 @@ pub mod logs;
 pub mod motion;
 pub mod overlay;
 pub mod panel;
+pub mod pose;
 pub mod saved;
 pub mod server;
 
