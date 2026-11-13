@@ -1,0 +1,10 @@
+#!/bin/sh
+# Fake whisper.cpp CLI (whisper-cli -m <model> -f <audio> ...): logs its arguments beside the model and
+# prints transcript.txt from there, or fails as on a recording it can't read if "fail" is there.
+dir=$(dirname "$2")
+echo "$*" > "$dir/args.txt"
+if [ -e "$dir/fail" ]; then
+    echo "error: failed to read audio file '$4'" >&2
+    exit 2
+fi
+cat "$dir/transcript.txt" 2>/dev/null

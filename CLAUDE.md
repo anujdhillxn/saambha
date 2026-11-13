@@ -1,6 +1,6 @@
 # Saambha
 
-Voice assistant for the Linux desktop. `server/` (Python, FastAPI) runs commands through an agent harness (pi or Claude Code); `desktop/` (Rust and GTK 4) is the dot and chat panel on the desktop; `android/` holds the phone and watch apps.
+Voice assistant for the Linux desktop. `desktop/` is the app, in Rust, one process: the server (`src/server/`: the HTTPS API the phone, watch and hotkey use, and the agent harness, pi or Claude Code, that runs their commands) and the dot and chat panel on the desktop (`src/ui/`, GTK 4). `agent/` is the agent's workspace (its prompt and guards); `android/` holds the phone and watch apps.
 
 ## Keep the code clean
 
@@ -11,13 +11,13 @@ Voice assistant for the Linux desktop. `server/` (Python, FastAPI) runs commands
 
 ## Conventions
 
-- Dependency injection: classes get their collaborators (programs, paths, clocks, clients, stores) through the constructor. Only the composition roots wire real implementations: `server/src/saambha/main.py` and, on Android, `Saambha.create(context)`. Tests use fakes, not monkeypatching.
-- Settings: every tunable value lives in `server/src/saambha/settings.py`; each can be overridden per user as `SAAMBHA_<NAME>` in `server/.env`, which also holds secrets. Android: the `Settings` data class in `core`.
-- Logging: `logging.getLogger(__name__)`; only the composition root configures logging. No `print`.
-- Tests sit with their component and come with every change, ideally first: `server/tests` (unit; `e2e/` runs the real server, with benchmarks of what it uses marked `bench`; `integration/` runs the real pi against a fake model; `models/` compares how well the real agent models do the job, on demand with `pytest -m models`), `desktop/src` (Rust `#[cfg(test)]`), `desktop/bench` (the app's idle cost: needs the desktop session, the release build and the server) and `android/core/src/test`.
-- `desktop/` talks to the server over HTTPS (`/desktop/*` answers this machine only). Its windows float above the others: layer-shell surfaces on Wayland desktops that have one (COSMIC, KDE), X11 windows elsewhere (GNOME, through XWayland). The dot is its own small window, so its animations stay cheap; the full-screen stage below it shows the chat panel and takes clicks only while that's open. Left alone it must cost next to nothing: it waits on the server for changes instead of polling. Its colours live in `src/theme.rs`, which draws the dot with them and hands them to the stylesheet (`src/style.css`) as `@define-color`.
-- The user's skills live in their own repo (`SAAMBHA_SKILLS_DIR`), never in this one; tests use `server/tests/fixtures/skills`.
-- `start.sh` runs `scripts/install.sh` every time, then (re)starts the services, so setup must stay idempotent and quick: each step checks before it acts, so it only installs what's missing, keeps what exists (`.env`, the CA, the venv) and applies changes. Before anything needs sudo, say why.
+- Dependency injection: types get their collaborators (programs, paths, clocks, clients, stores) when they're made, behind traits where a test needs a fake. Only the composition roots wire real implementations: `desktop/src/server/compose.rs` (the server), `desktop/src/main.rs` (the app) and, on Android, `Saambha.create(context)`. Tests use fakes, not monkeypatching.
+- Settings: every tunable value lives in `desktop/src/server/settings.rs`; each can be overridden per user as `SAAMBHA_<NAME>` in `desktop/.env`, which also holds secrets. Android: the `Settings` data class in `core`.
+- Logging: the `log` macros; only `main.rs` configures logging. No `println!` for logging.
+- Tests sit with their component and come with every change, ideally first: `desktop/src` (unit, `#[cfg(test)]`, with the fake CLIs in `desktop/tests/fakes`), `desktop/tests` (`e2e.rs` runs the real server over HTTPS; `pi.rs` runs the real pi against a fake model; `models.rs` compares how well the real agent models do the job, on demand with `cargo test --test models -- --run`), `desktop/bench` (the app's idle cost: needs the desktop session and the release build) and `android/core/src/test`.
+- Speech runs as programs, each only while it's needed: whisper.cpp for each recording, piper for each reply (`scripts/speech.sh` installs them). The UI calls the server's services directly, in the same process; the API's routes are for the phone, watch, hotkey and agent. The dot's windows float above the others: layer-shell surfaces on Wayland desktops that have one (COSMIC, KDE), X11 windows elsewhere (GNOME, through XWayland). The dot is its own small window, so its animations stay cheap; the full-screen stage below it shows the chat panel and takes clicks only while that's open. Left alone the app must cost next to nothing: the dot is told of changes instead of polling. Its colours live in `src/ui/theme.rs`, which draws the dot with them and hands them to the stylesheet (`src/ui/style.css`) as `@define-color`.
+- The user's skills live in their own repo (`SAAMBHA_SKILLS_DIR`), never in this one; tests use `desktop/tests/fixtures/skills`.
+- `start.sh` runs `scripts/install.sh` every time, then (re)starts the service, so setup must stay idempotent and quick: each step checks before it acts, so it only installs what's missing, keeps what exists (`.env`, the CA, the speech tools) and applies changes. Before anything needs sudo, say why.
 - The README covers setup and usage only.
 
 ## Workflow
@@ -28,7 +28,6 @@ Voice assistant for the Linux desktop. `server/` (Python, FastAPI) runs commands
 ## Before finishing
 
 ```bash
-cd server && venv/bin/ruff check src tests && venv/bin/pytest && venv/bin/pytest -m bench
-cd desktop && cargo test && cargo clippy && cargo build --release && node --test bench/*.js
+cd desktop && cargo test && cargo clippy --all-targets && cargo build --release && node --test bench/*.js
 cd android && JAVA_HOME=~/.local/share/jdk17 ANDROID_HOME=~/Android/Sdk ./gradlew :core:testDebugUnitTest
 ```

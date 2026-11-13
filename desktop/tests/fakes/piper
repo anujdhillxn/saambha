@@ -1,0 +1,7 @@
+#!/bin/sh
+# Fake piper (piper -m <voice> --output-raw): saves the text it was given and its pid beside the voice,
+# then "speaks" for as many seconds as speech_seconds there says (default 0).
+dir=$(dirname "$2")
+echo $$ > "$dir/piper.pid"
+cat > "$dir/spoken.tmp" && mv "$dir/spoken.tmp" "$dir/spoken.txt"
+sleep "$(cat "$dir/speech_seconds" 2>/dev/null || echo 0)"
