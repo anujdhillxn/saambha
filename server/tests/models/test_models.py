@@ -142,6 +142,13 @@ def test_a_failure_in_a_sentence(agent):
     assert len(reply.split()) <= LONG_REPLY, reply
 
 
+@pytest.mark.parametrize("said", ["What's up?", "You"])  # the second, a stray word speech recognition picked up
+def test_small_talk_gets_a_few_words_back(agent, said):
+    reply = agent.ask(said)
+
+    assert len(reply.split()) <= 10 and not re.search(r"\b(help|assist|Saambha)", reply, re.I), reply
+
+
 def test_follow_up(agent):
     agent.ask("My locker code is 4821.")
 
