@@ -1,6 +1,6 @@
-//! The dot: a disc showing what Saambha is doing, drawn with Cairo, in its own small window and, while
-//! it's dragged, on the stage. It draws frames only while something about it moves (a ring, the
-//! bars, a transition), so a dot left alone costs nothing.
+//! The dot: a disc with the mascot posed as what Saambha is doing, drawn with Cairo, in its own small
+//! window and, while it's dragged, on the stage. It draws frames only while something about it moves
+//! (a ring, a transition), so a dot left alone costs nothing.
 
 use std::cell::RefCell;
 use std::f64::consts::{FRAC_PI_2, FRAC_PI_4, PI, TAU};
@@ -10,13 +10,15 @@ use std::time::Duration;
 use gtk::prelude::*;
 use gtk::{cairo, glib};
 
-use crate::ui::motion::{Ease, Tween};
 use crate::server::status::State;
+use crate::ui::motion::{Ease, Tween};
+use crate::ui::pose;
 use crate::ui::theme::{self, Rgba};
 
 /// The dot's box: the disc in its middle, the rest for its glow and rings.
 pub const BOX: i32 = 72;
 const RADIUS: f64 = 20.0;
+const POSE: f64 = 32.0; // the mascot's square, inside the disc
 
 const FAST: Duration = Duration::from_millis(150);
 const MEDIUM: Duration = Duration::from_millis(250);
@@ -230,10 +232,8 @@ impl Dot {
             let side = 14.0 * scale;
             rounded_rect(cr, cx - side / 2.0, cy - side / 2.0, side, side, 3.0 * scale);
             let _ = cr.fill();
-        } else if self.look.speaking {
-            bars(cr, cx, cy, scale, elapsed);
         } else {
-            mic(cr, cx, cy, scale);
+            pose::of(self.look.state, self.look.speaking).draw(cr, cx, cy, POSE * scale);
         }
 
         match self.look.state {
@@ -277,39 +277,6 @@ fn rounded_rect(cr: &cairo::Context, x: f64, y: f64, width: f64, height: f64, ra
     cr.close_path();
 }
 
-/// The microphone, 20 pixels across, drawn on a 24-unit grid.
-fn mic(cr: &cairo::Context, cx: f64, cy: f64, scale: f64) {
-    let unit = 20.0 / 24.0 * scale;
-    cr.save().ok();
-    cr.translate(cx - 12.0 * unit, cy - 12.0 * unit);
-    cr.scale(unit, unit);
-    rounded_rect(cr, 9.0, 3.0, 6.0, 11.0, 3.0);
-    let _ = cr.fill();
-    cr.arc_negative(12.0, 11.0, 6.0, PI, 0.0); // the stand, under it
-    cr.move_to(12.0, 17.0);
-    cr.line_to(12.0, 20.5);
-    cr.move_to(8.5, 20.5);
-    cr.line_to(15.5, 20.5);
-    cr.set_line_width(2.0);
-    cr.set_line_cap(cairo::LineCap::Round);
-    let _ = cr.stroke();
-    cr.restore().ok();
-}
-
-/// Speaking: three bars bouncing like a voice.
-fn bars(cr: &cairo::Context, cx: f64, cy: f64, scale: f64, elapsed: f64) {
-    const PERIOD: f64 = 0.9;
-    let (width, gap) = (3.5 * scale, 3.0 * scale);
-    let left = cx - (3.0 * width + 2.0 * gap) / 2.0;
-    for i in 0..3 {
-        let phase = ((elapsed + 0.3 * f64::from(i)) / PERIOD).fract(); // each a third of the way behind
-        let up = Ease::IN_OUT.at(if phase < 0.5 { phase * 2.0 } else { 2.0 - phase * 2.0 });
-        let height = (5.0 + 13.0 * up) * scale;
-        rounded_rect(cr, left + f64::from(i) * (width + gap), cy - height / 2.0, width, height, 2.0 * scale);
-    }
-    let _ = cr.fill();
-}
-
 /// Listening: rings rippling out of the disc, one after the other.
 fn ripples(cr: &cairo::Context, cx: f64, cy: f64, scale: f64, color: Rgba, elapsed: f64) {
     const PERIOD: f64 = 1.4;
@@ -350,4 +317,30 @@ fn pulse(cr: &cairo::Context, cx: f64, cy: f64, scale: f64, color: Rgba, elapsed
     cr.set_line_width(2.0 * scale);
     cr.arc(cx, cy, 23.0 * scale * (1.0 + 0.12 * swell), 0.0, TAU);
     let _ = cr.stroke();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_pose_fits_on_the_disc_within_its_rim() {
+        const ZOOM: f64 = 4.0;
+        let side = BOX * ZOOM as i32;
+        let centre = f64::from(side) / 2.0;
+        let looks = [State::Ready, State::Cold, State::Listening, State::Working, State::Asking].map(|state| (state, false));
+        for (state, speaking) in looks.into_iter().chain([(State::Working, true)]) {
+            let mut surface = cairo::ImageSurface::create(cairo::Format::A8, side, side).unwrap();
+            let stride = surface.stride() as usize;
+            {
+                let cr = cairo::Context::new(&surface).unwrap();
+                pose::of(state, speaking).draw(&cr, centre, centre, POSE * ZOOM);
+            }
+
+            for (i, &covered) in surface.data().unwrap().iter().enumerate() {
+                let (x, y) = ((i % stride) as f64 + 0.5 - centre, (i / stride) as f64 + 0.5 - centre);
+                assert!(covered == 0 || x.hypot(y) < (RADIUS - 1.0) * ZOOM, "{state:?} (speaking: {speaking}) at {x}, {y}");
+            }
+        }
+    }
 }
