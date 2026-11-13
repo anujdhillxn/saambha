@@ -22,6 +22,7 @@ class FakeAssistant:
     def __init__(self):
         self.asked = []
         self.session = False
+        self.reply = None  # else "You said: ..."
 
     def ask(self, text, on_event=None):
         self.asked.append(text)
@@ -29,7 +30,7 @@ class FakeAssistant:
         if on_event:
             on_event("tool_use", "skill spotify")
             on_event("text", f"You said: {text}")
-        return f"You said: {text}"
+        return self.reply or f"You said: {text}"
 
     def reset(self):
         self.session = False
@@ -251,6 +252,17 @@ def test_command_replies_and_speaks_on_the_desktop(paired, services):
     assert [(e.said, e.reply) for e in services.history.recent(10)] == [("play music", "You said: play music")]
 
 
+def test_only_the_summary_is_spoken_and_the_details_stay_in_the_chat(paired, services):
+    services.assistant.reply = "Merge keeps both, rebase rewrites. More in the details.<details>The long version.</details>"
+
+    res = paired.post("/command", json={"text": "merge or rebase"})
+
+    assert res.json()["text"] == "Merge keeps both, rebase rewrites. More in the details."
+    assert services.speaker.spoken == ["Merge keeps both, rebase rewrites. More in the details."]
+    assert [(e.reply, e.details) for e in services.history.recent(10)] == [
+        ("Merge keeps both, rebase rewrites. More in the details.", "The long version.")]
+
+
 def test_command_for_the_phone_is_not_spoken_on_the_desktop(paired, services):
     res = paired.post("/command", json={"text": "play music", "speak": "none"})
 
@@ -410,13 +422,13 @@ def test_reset_starts_a_new_conversation_in_the_history(desktop, services, clock
 
 
 def test_desktop_history(desktop, services, clock):
-    services.history.add("play music", "Playing")
+    services.history.add("play music", "Playing", "")
     clock.advance(5)
-    services.history.add("louder", "Done")
+    services.history.add("louder", "Done", "Two notches up.")
 
     res = desktop.get("/desktop/history", params={"limit": 1})
 
-    assert res.json() == [{"time": clock.now, "said": "louder", "reply": "Done"}]
+    assert res.json() == [{"time": clock.now, "said": "louder", "reply": "Done", "details": "Two notches up."}]
 
 
 def test_desktop_log_follows_the_log(desktop, services):

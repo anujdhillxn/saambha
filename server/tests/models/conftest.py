@@ -14,6 +14,7 @@ import pytest
 from saambha.agent.base import Harness
 from saambha.agent.pi import with_ollama_model
 from saambha.main import build_harness
+from saambha.reply import parse
 from saambha.settings import ROOT, Settings, load_env_file
 
 SAMPLE_SKILLS = Path(__file__).parents[1] / "fixtures" / "skills"
@@ -49,7 +50,8 @@ def pytest_generate_tests(metafunc):
 @dataclass
 class Reply:
     said: str
-    text: str
+    text: str  # the summary, spoken
+    details: str
     seconds: float
 
 
@@ -60,10 +62,11 @@ class Agent:
     replies: list[Reply] = field(default_factory=list)
 
     def ask(self, text: str) -> str:
+        """The reply's summary: what's spoken."""
         start = time.monotonic()
-        reply = self.harness.ask(text)
-        self.replies.append(Reply(text, reply, time.monotonic() - start))
-        return reply
+        reply = parse(self.harness.ask(text))
+        self.replies.append(Reply(text, reply.summary, reply.details, time.monotonic() - start))
+        return reply.summary
 
     def chat(self, *texts: str):
         """Says [texts] first, in the same conversation, without counting the replies."""

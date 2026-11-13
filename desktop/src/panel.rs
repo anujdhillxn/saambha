@@ -185,6 +185,7 @@ impl Panel {
                 Row::When(time) => gtk::Label::builder().label(time).css_classes(["when"]).build(),
                 Row::Said(text) => bubble("said", &text),
                 Row::Reply(text) => bubble("reply", &text),
+                Row::Details(text) => bubble("details", &text),
             };
             self.chat.append(&label);
         }
