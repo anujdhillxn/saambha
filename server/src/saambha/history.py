@@ -1,10 +1,14 @@
 """The chat history: each command and Saambha's reply, and where a new conversation started, one
 JSON object per line."""
 import json
+import logging
+import os
 import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from pathlib import Path
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -49,9 +53,21 @@ class ChatHistory:
         if not self.path.exists():
             return []
         lines = self.path.read_text(encoding="utf-8").splitlines()[-limit:]
-        return [from_json(json.loads(line)) for line in lines]
+        return [entry for line in lines if (entry := _read(line)) is not None]
 
     def _write(self, entry: Entry):
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(to_json(entry)) + "\n")
+            f.flush()
+            os.fsync(f.fileno())  # on disk before, say, the command that shuts the PC down
+
+
+def _read(line: str) -> Entry | None:
+    """The entry on [line], or None if it can't be read. A crash mid-write can leave a line padded
+    with NUL bytes, ahead of the entry."""
+    try:
+        return from_json(json.loads(line.strip("\0")))
+    except (ValueError, TypeError, KeyError):
+        log.warning("Leaving out a line of the chat history that can't be read: %r", line[:200])
+        return None
