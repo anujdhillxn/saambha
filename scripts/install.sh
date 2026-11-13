@@ -24,9 +24,9 @@ command -v curl &>/dev/null || need "downloads the voice and the harness" curl
 command -v openssl &>/dev/null || need "makes the HTTPS certificates" openssl
 python3 -c "import ensurepip" &>/dev/null || need "the server's Python environment" python3-venv
 command -v cc &>/dev/null || need "building the desktop app" build-essential
-pkg-config --exists webkit2gtk-4.1 2>/dev/null || need "building the desktop app (its web view)" libwebkit2gtk-4.1-dev
-[ -f /usr/include/xdo.h ] || need "building the desktop app" libxdo-dev
-dpkg -s libgtk-layer-shell0 &>/dev/null || need "the desktop app's windows, to float above the others" libgtk-layer-shell0
+pkg-config --exists gtk4 2>/dev/null || need "building the desktop app (GTK 4)" libgtk-4-dev
+command -v meson &>/dev/null || need "building gtk4-layer-shell, which the desktop app floats above the others with" meson
+command -v ninja &>/dev/null || need "building gtk4-layer-shell" ninja-build
 
 if [ ${#packages[@]} -gt 0 ]; then
     echo "Installing with apt, which needs your password (sudo):"
@@ -189,6 +189,7 @@ if ! command -v cargo &>/dev/null && [ ! -x "$HOME/.cargo/bin/cargo" ]; then
     echo "Installing Rust (rustup, into ~/.cargo) to build it"
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --component clippy --no-modify-path
 fi
+../scripts/gtk4-layer-shell.sh
 (cd ../desktop && PATH="$HOME/.cargo/bin:$PATH" cargo build --release)
 echo "ok"
 

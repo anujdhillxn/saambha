@@ -36,19 +36,21 @@ jobs:
         working-directory: desktop
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libgtk-layer-shell0
+      - run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev meson ninja-build
+      - uses: actions/cache@v4
+        with:
+          path: ~/.local/lib/libgtk4-layer-shell*
+          key: gtk4-layer-shell-${{ hashFiles('scripts/gtk4-layer-shell.sh') }}
+      - run: scripts/gtk4-layer-shell.sh
+        working-directory: .
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: desktop
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test
-      - run: node --test
 
   android:
     runs-on: ubuntu-24.04

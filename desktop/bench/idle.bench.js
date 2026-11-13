@@ -1,7 +1,7 @@
 // A benchmark: the app, left alone, must cost next to nothing. It runs the release build (a second
-// dot shows meanwhile) against the Saambha server on this machine, and measures what it and its
-// web views use while Saambha sits idle. The desktop is in use meanwhile, so it judges the quietest
-// of a few windows, and only ones where Saambha's status didn't change. Needs a desktop session,
+// dot shows meanwhile) against the Saambha server on this machine, and measures what it uses while
+// Saambha sits idle. The desktop is in use meanwhile, so it judges the quietest of a few windows,
+// and only ones where Saambha's status didn't change. Needs a desktop session,
 // `cargo build --release` and the server running.
 // Run: node --test bench/*.js
 import assert from "node:assert/strict";
@@ -21,7 +21,7 @@ const TRIES = 8; // windows, for that many idle ones
 // Budgets, a little lenient.
 const CPU = 0.01; // of one core
 const WAKEUPS = 20; // a second
-const MEMORY_MB = 300;
+const MEMORY_MB = 80;
 
 const TICKS_PER_S = 100; // USER_HZ, the unit of /proc/<pid>/stat's CPU times
 
