@@ -1,4 +1,19 @@
 {
+  "autoMemoryEnabled": false,
+  "claudeMdExcludes": [
+    "**/CLAUDE.md",
+    "**/CLAUDE.local.md"
+  ],
+  "disableBundledSkills": true,
+  "skillOverrides": {
+    "design": "off",
+    "doctor": "off"
+  },
+  "enabledPlugins": {
+    "cc-plugin-agents-md@builtin": false,
+    "cc-plugin-telemetry@builtin": false,
+    "cc-plugin-plugin-authoring@builtin": false
+  },
   "hooks": {
     "PreToolUse": [
       {
