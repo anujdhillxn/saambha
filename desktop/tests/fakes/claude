@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Fake `claude -p`: replies "You said: <prompt>" in stream-json, as the real CLI would.
+#
+# Runs in the agent's workspace, where it logs each call to claude_calls.jsonl and reads claude_mode:
+#   hang         never answers
+#   fail         fails every time, as when not logged in
+#   fail-resume  when asked to --resume, fails as the real CLI does: an error result, then exit 1
+set -euo pipefail
+mode=$(cat claude_mode 2>/dev/null || true)
+n=$(cat claude_calls.jsonl 2>/dev/null | wc -l || true)
+jq -nc --arg cwd "$PWD" '{args: $ARGS.positional, cwd: $cwd}' --args -- "$@" >> claude_calls.jsonl
+
+[ "$mode" = hang ] && exec sleep 300
+
+args=("$@")
+prompt="" resume=""
+for ((i = 0; i < ${#args[@]}; i++)); do
+    case "${args[i]}" in
+        -p) prompt=${args[i + 1]} ;;
+        --resume) resume=${args[i + 1]} ;;
+    esac
+done
+
+if [ "$mode" = fail ]; then
+    echo '{"type": "result", "subtype": "error_during_execution", "is_error": true, "result": ""}'
+    echo "Not logged in. Please run /login" >&2
+    exit 1
+fi
+if [ -n "$resume" ] && [ "$mode" = fail-resume ]; then
+    jq -nc --arg s "$resume" '{type: "result", subtype: "error_during_execution", is_error: true, result: "", session_id: $s}'
+    echo "No conversation found with session ID: $resume" >&2
+    exit 1
+fi
+
+reply="You said: $prompt"
+echo '{"type": "system", "subtype": "init"}'
+echo '{"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "Skill", "input": {"skill": "spotify"}}]}}'
+jq -nc --arg r "$reply" '{type: "assistant", message: {content: [{type: "text", text: $r}]}}'
+jq -nc --arg r "$reply" --arg s "${resume:-sess-$((n + 1))}" '{type: "result", result: $r, session_id: $s}'

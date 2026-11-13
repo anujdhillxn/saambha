@@ -1,27 +1,25 @@
-// A benchmark: the app, left alone, must cost next to nothing. It runs the release build (a second
-// dot shows meanwhile) against the Saambha server on this machine, and measures what it uses while
-// Saambha sits idle. The desktop is in use meanwhile, so it judges the quietest of a few windows,
-// and only ones where Saambha's status didn't change. Needs a desktop session,
-// `cargo build --release` and the server running.
+// A benchmark: the app, left alone, must cost next to nothing. It runs the release build on its own
+// port and files (a second dot shows meanwhile) and measures what it uses while it sits idle. The
+// desktop is in use meanwhile, so it judges the quietest of a few windows. Needs a desktop session and
+// `cargo build --release`.
 // Run: node --test bench/*.js
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { get } from "node:https";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { createServer } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { test } from "node:test";
 
-const APP = new URL("../target/release/saambha-desktop", import.meta.url).pathname;
-const CA = new URL("../../server/ca.pem", import.meta.url).pathname;
-const SERVER = process.env.SAAMBHA_URL ?? "https://127.0.0.1:8765";
-const SETTLE_MS = 10000; // to start up and load its pages (longer after a fresh build)
+const APP = new URL("../target/release/saambha", import.meta.url).pathname;
+const SETTLE_MS = 10000; // to start up (longer after a fresh build)
 const WINDOW_MS = 5000;
-const WINDOWS = 3; // idle ones, to judge the quietest
-const TRIES = 8; // windows, for that many idle ones
+const WINDOWS = 3; // to judge the quietest
 // Budgets, a little lenient.
 const CPU = 0.01; // of one core
 const WAKEUPS = 20; // a second
-const MEMORY_MB = 25;
+const MEMORY_MB = 30;
 
 const TICKS_PER_S = 100; // USER_HZ, the unit of /proc/<pid>/stat's CPU times
 
@@ -61,38 +59,44 @@ function memoryMb(pid) {
   return processes(pid).reduce((sum, p) => sum + kb(p), 0) / 1024;
 }
 
-/** The version of the server's status: it changes with whatever Saambha does. */
-function statusVersion() {
-  return new Promise((resolve, reject) => {
-    get(`${SERVER}/desktop/status`, { ca: readFileSync(CA) }, (res) => {
-      let body = "";
-      res.on("data", (chunk) => (body += chunk)).on("end", () => resolve(JSON.parse(body).version));
-    }).on("error", reject);
+/** A port nothing's listening on. */
+function freePort() {
+  return new Promise((resolve) => {
+    const server = createServer().listen(0, "127.0.0.1", () => {
+      const { port } = server.address();
+      server.close(() => resolve(port));
+    });
   });
 }
 
 const skip = !(process.env.WAYLAND_DISPLAY || process.env.DISPLAY) ? "no desktop session"
-  : !existsSync(APP) ? "no release build"
-  : !existsSync(CA) ? "no server CA" : false;
+  : !existsSync(APP) ? "no release build" : false;
 
 test("the app left alone costs next to nothing", { skip }, async () => {
-  const app = spawn(APP, [SERVER, CA], { stdio: "ignore" });
+  const work = mkdtempSync(join(tmpdir(), "saambha-bench-"));
+  const env = {
+    ...process.env,
+    XDG_STATE_HOME: work, // where the dot was left
+    SAAMBHA_PORT: String(await freePort()),
+    SAAMBHA_DEVICES_FILE: join(work, "devices.json"),
+    SAAMBHA_HISTORY_FILE: join(work, "history.jsonl"),
+    SAAMBHA_SESSION_FILE: join(work, "session_id"),
+    SAAMBHA_LOG_FILE: join(work, "saambha.log"),
+  };
+  const app = spawn(APP, [], { stdio: "ignore", env });
   try {
     await sleep(SETTLE_MS);
     const idle = [];
-    for (let tries = TRIES; tries && idle.length < WINDOWS; tries--) {
-      const version = await statusVersion();
+    for (let n = 0; n < WINDOWS; n++) {
       const before = counters(app.pid);
       await sleep(WINDOW_MS);
       const after = counters(app.pid);
-      if ((await statusVersion()) !== version) continue;
       const seconds = WINDOW_MS / 1000;
       idle.push({
         cpu: growth(before.cpu, after.cpu) / seconds,
         wakeups: growth(before.switches, after.switches) / seconds,
       });
     }
-    assert.ok(idle.length, "Saambha was never left alone");
     const cpu = Math.min(...idle.map((w) => w.cpu));
     const wakeups = Math.min(...idle.map((w) => w.wakeups));
     const memory = memoryMb(app.pid);
@@ -103,5 +107,6 @@ test("the app left alone costs next to nothing", { skip }, async () => {
     assert.ok(memory < MEMORY_MB, `${memory.toFixed(0)} MB`);
   } finally {
     app.kill();
+    rmSync(work, { recursive: true, force: true });
   }
 });

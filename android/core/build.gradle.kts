@@ -19,13 +19,13 @@ android {
         jvmTarget = "17"
     }
 
-    // The server's local CA (../server/ca.pem, made by scripts/gen_certs.sh) is bundled as res/raw/saambha_ca.
+    // The server's local CA (../desktop/ca.pem, made by scripts/gen_certs.sh) is bundled as res/raw/saambha_ca.
     // The apps trust only this CA when talking to the server.
     sourceSets["main"].res.srcDir(layout.buildDirectory.dir("generated/ca-res"))
 }
 
 val copyCa by tasks.registering(Copy::class) {
-    from(rootProject.file("../server/ca.pem")) { rename { "saambha_ca.pem" } }
+    from(rootProject.file("../desktop/ca.pem")) { rename { "saambha_ca.pem" } }
     into(layout.buildDirectory.dir("generated/ca-res/raw"))
 }
 tasks.named("preBuild") { dependsOn(copyCa) }

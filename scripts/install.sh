@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Sets up what Saambha needs on this machine, only what's missing, so start.sh runs it every time.
 # Installs what the configured harness needs (SAAMBHA_HARNESS / SAAMBHA_PI_MODEL in .env, see
-# src/saambha/settings.py).
+# src/server/settings.rs).
 set -euo pipefail
-cd "$(dirname "$0")/../server"
+cd "$(dirname "$0")/../desktop"
 
 PI_PACKAGE="@earendil-works/pi-coding-agent@1.1.0"
 NODE_MIN="22.19.0"
@@ -20,12 +20,12 @@ need() {  # need <why> <apt package>...
 }
 command -v sox &>/dev/null || need "records the hotkey's voice commands" sox
 command -v aplay &>/dev/null || need "plays the spoken replies" alsa-utils
-command -v curl &>/dev/null || need "downloads the voice and the harness" curl
+command -v curl &>/dev/null || need "downloads speech, its models and the harness" curl
 command -v openssl &>/dev/null || need "makes the HTTPS certificates" openssl
-python3 -c "import ensurepip" &>/dev/null || need "the server's Python environment" python3-venv
-command -v cc &>/dev/null || need "building the desktop app" build-essential
-pkg-config --exists gtk4 2>/dev/null || need "building the desktop app (GTK 4)" libgtk-4-dev
-command -v meson &>/dev/null || need "building gtk4-layer-shell, which the desktop app floats above the others with" meson
+command -v cc &>/dev/null || need "building the app and speech recognition" build-essential
+command -v cmake &>/dev/null || need "building speech recognition (whisper.cpp)" cmake
+pkg-config --exists gtk4 2>/dev/null || need "building the app (GTK 4)" libgtk-4-dev
+command -v meson &>/dev/null || need "building gtk4-layer-shell, which the dot floats above the other windows with" meson
 command -v ninja &>/dev/null || need "building gtk4-layer-shell" ninja-build
 
 if [ ${#packages[@]} -gt 0 ]; then
@@ -35,14 +35,6 @@ if [ ${#packages[@]} -gt 0 ]; then
 else
     echo "all installed"
 fi
-
-step "Python environment"
-[ -d venv ] || python3 -m venv venv
-if ! cmp -s requirements.txt venv/requirements.txt; then  # the copy is what was last installed
-    venv/bin/pip install -q -r requirements.txt
-    cp requirements.txt venv/requirements.txt
-fi
-echo "ok"
 
 step ".env"
 if [ -f .env ]; then
@@ -76,15 +68,21 @@ else
     echo "allowed"
 fi
 
-# The settings the rest depends on, as the server will see them.
-eval "$(PYTHONPATH=src venv/bin/python - <<'PY'
-import shlex
-from saambha.main import load_settings
-s = load_settings()
-for name in ("port", "harness", "pi_model", "ollama_url", "ollama_context", "skills_dir"):
-    print(f"{name.upper()}={shlex.quote(str(getattr(s, name)))}")
-PY
-)"
+step "The app (the server, the dot and its chat panel)"
+if ! command -v cargo &>/dev/null && [ ! -x "$HOME/.cargo/bin/cargo" ]; then
+    echo "Installing Rust (rustup, into ~/.cargo) to build it"
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --component clippy --no-modify-path
+fi
+../scripts/gtk4-layer-shell.sh
+PATH="$HOME/.cargo/bin:$PATH" cargo build --release
+echo "ok"
+
+step "Speech (whisper.cpp, piper and their models)"
+../scripts/speech.sh
+echo "ok"
+
+# The settings the rest depends on, as the app sees them.
+eval "$(target/release/saambha settings)"
 
 step "Skills ($SKILLS_DIR)"
 if [ -d "$SKILLS_DIR" ]; then
@@ -101,8 +99,7 @@ node_ok() {  # is `node` at least $NODE_MIN?
 
 install_node22() {  # latest Node 22 LTS into $NODE_DIR, checksum-verified
     local version file tmp
-    version=$(curl -fsSL https://nodejs.org/dist/index.json |
-        python3 -c "import json,sys; print(next(r['version'] for r in json.load(sys.stdin) if r['version'].startswith('v22.') and r['lts']))")
+    version=$(curl -fsSL https://nodejs.org/dist/latest-v22.x/SHASUMS256.txt | grep -oE 'node-v22[0-9.]+-linux-x64\.tar\.xz' | grep -oE 'v22[0-9.]+[0-9]')
     file="node-$version-linux-x64.tar.xz"
     tmp=$(mktemp -d)
     curl -fsSL -o "$tmp/$file" "https://nodejs.org/dist/$version/$file"
@@ -155,16 +152,7 @@ setup_ollama() {  # $1: the model pi uses, e.g. saambha-gemma4:e4b
         ollama create "$model" -f "$modelfile"
         rm "$modelfile"
     fi
-    # Tell pi about it: provider "ollama" in ~/.pi/agent/models.json (other entries are kept).
-    PYTHONPATH=src venv/bin/python - "$model" "$OLLAMA_URL" "$OLLAMA_CONTEXT" <<'PY'
-import json, sys
-from pathlib import Path
-from saambha.agent.pi import with_ollama_model
-path = Path.home() / ".pi" / "agent" / "models.json"
-config = json.loads(path.read_text()) if path.exists() else {}
-path.parent.mkdir(parents=True, exist_ok=True)
-path.write_text(json.dumps(with_ollama_model(config, sys.argv[2], sys.argv[1], int(sys.argv[3])), indent=2) + "\n")
-PY
+    # The app tells pi about it, in ~/.pi/agent/models.json, as it starts.
     echo "ok"
 }
 
@@ -184,16 +172,7 @@ case "$HARNESS" in
     *) echo "Unknown harness '$HARNESS' (SAAMBHA_HARNESS): use pi or claude" >&2; exit 1 ;;
 esac
 
-step "Desktop app (the dot and its chat panel)"
-if ! command -v cargo &>/dev/null && [ ! -x "$HOME/.cargo/bin/cargo" ]; then
-    echo "Installing Rust (rustup, into ~/.cargo) to build it"
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --component clippy --no-modify-path
-fi
-../scripts/gtk4-layer-shell.sh
-(cd ../desktop && PATH="$HOME/.cargo/bin:$PATH" cargo build --release)
-echo "ok"
-
-service() {  # service <name> <description> <command> [more [Service] lines]: a user service that runs while you're logged in
+service() {  # service <name> <description> <command>: a user service that runs while you're logged in
     cat > "$HOME/.config/systemd/user/$1.service" <<UNIT
 [Unit]
 Description=$2
@@ -203,19 +182,15 @@ After=graphical-session.target
 [Service]
 ExecStart=$3
 Restart=on-failure
-${4:-}
 
 [Install]
 WantedBy=graphical-session.target
 UNIT
 }
 
-step "Background services"
+step "Background service"
 mkdir -p "$HOME/.config/systemd/user"
-service saambha "Saambha voice assistant" "$PWD/venv/bin/python -m saambha" "WorkingDirectory=$PWD
-Environment=PYTHONPATH=$PWD/src"
-service saambha-desktop "Saambha's dot and chat panel" \
-    "$(cd ../desktop && pwd)/target/release/saambha-desktop https://127.0.0.1:$PORT $PWD/ca.pem"
+service saambha "Saambha voice assistant" "$PWD/target/release/saambha"
 systemctl --user daemon-reload
-systemctl --user enable --quiet saambha saambha-desktop
+systemctl --user enable --quiet saambha
 echo "ok"

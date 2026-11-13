@@ -1,12 +1,6 @@
 .env
-__pycache__/
-*.pyc
 *.pem
-server.log
-venv/
-.venv/
+saambha.log*
 devices.json
-.pytest_cache/
-server/.claude/skills
+agent/.claude/skills
 desktop/target/
-desktop/gen/

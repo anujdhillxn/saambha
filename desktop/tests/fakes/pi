@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# Fake `pi --mode json --print ... -- <message>`: replies "You said: <message>" with the same events the
+# real pi prints (see tests/pi.rs for the real thing).
+#
+# Runs in the agent's workspace, where it logs each call to pi_calls.jsonl and reads pi_mode. A message
+# mentioning "music" reads the spotify skill first. Modes:
+#   hang          never answers
+#   error         the model call fails (after pi's own retries)
+#   retry         the first model call fails, the retry succeeds
+#   no-auth       exits 1 before starting, like pi with no login
+#   narrate       says what it's about to do alongside a bash call, then ends with "Switched it"
+#   narrate-mute  the same, but ends saying nothing
+#   mute          ends at once, saying and doing nothing
+set -euo pipefail
+mode=$(cat pi_mode 2>/dev/null || true)
+jq -nc --arg cwd "$PWD" '{args: $ARGS.positional, cwd: $cwd}' --args -- "$@" >> pi_calls.jsonl
+
+[ "$mode" = hang ] && exec sleep 300
+if [ "$mode" = no-auth ]; then
+    printf 'No API key found for anthropic.\n\nUse /login to log into a provider\n' >&2
+    exit 1
+fi
+
+args=("$@")
+message="" session=""
+for ((i = 0; i < ${#args[@]}; i++)); do
+    case "${args[i]}" in
+        --session-id) session=${args[i + 1]} ;;
+        --) message=${args[i + 1]}; break ;;
+    esac
+done
+
+# assistant <content JSON> [stop reason] [error message]
+assistant() {
+    local msg
+    msg=$(jq -nc --argjson content "$1" --arg stop "${2:-stop}" --arg error "${3:-}" \
+        '{role: "assistant", content: $content, stopReason: $stop} + (if $error == "" then {} else {errorMessage: $error} end)')
+    echo "{\"type\": \"message_start\", \"message\": $msg}"
+    echo "{\"type\": \"message_end\", \"message\": $msg}"
+}
+
+# tool <id> <name> <arguments JSON>: the model calls it, and pi runs it
+tool() {
+    assistant "[{\"type\": \"toolCall\", \"id\": \"$1\", \"name\": \"$2\", \"arguments\": $3}]" toolUse
+    echo "{\"type\": \"tool_execution_start\", \"toolCallId\": \"$1\", \"toolName\": \"$2\", \"args\": $3}"
+    echo "{\"type\": \"tool_execution_end\", \"toolCallId\": \"$1\", \"toolName\": \"$2\", \"result\": {}, \"isError\": false}"
+}
+
+jq -nc --arg id "$session" --arg cwd "$PWD" '{type: "session", version: 3, id: $id, cwd: $cwd}'
+echo '{"type": "agent_start"}'
+jq -nc --arg m "$message" '{type: "message_end", message: {role: "user", content: [{type: "text", text: $m}]}}'
+if [ "$mode" = error ] || [ "$mode" = retry ]; then
+    assistant '[]' error "Connection error."
+    echo '{"type": "auto_retry_start", "attempt": 1, "maxAttempts": 3, "delayMs": 0, "errorMessage": "Connection error."}'
+fi
+if [ "$mode" != error ]; then
+    [[ "$message" == *music* ]] && tool call_1 read '{"path": "skills/spotify/SKILL.md"}'
+    case "$mode" in
+        mute) assistant '[]' ;;
+        narrate*)
+            msg=$(jq -nc '{role: "assistant", content: [{type: "text", text: "I will set the default sink to 91."},
+                {type: "toolCall", id: "call_2", name: "bash", arguments: {command: "pactl set-default-sink 91"}}], stopReason: "toolUse"}')
+            echo "{\"type\": \"message_end\", \"message\": $msg}"
+            echo '{"type": "tool_execution_start", "toolCallId": "call_2", "toolName": "bash", "args": {"command": "pactl set-default-sink 91"}}'
+            echo '{"type": "tool_execution_end", "toolCallId": "call_2", "toolName": "bash", "result": {}, "isError": false}'
+            if [ "$mode" = narrate-mute ]; then assistant '[]'; else assistant '[{"type": "text", "text": "Switched it"}]'; fi
+            ;;
+        *) assistant "$(jq -nc --arg m "You said: $message" '[{type: "text", text: $m}]')" ;;
+    esac
+fi
+echo '{"type": "agent_end", "messages": []}'

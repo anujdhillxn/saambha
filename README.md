@@ -3,8 +3,8 @@
 Voice-controlled Linux desktop assistant. Speak a command, an AI agent executes it.
 
 ```
-server/    the desktop server (Python): src/saambha, tests, and the agent's workspace (system-prompt.md)
-desktop/   the dot and chat panel on the desktop (Rust, GTK 4)
+desktop/   the app (Rust): the server the apps and hotkey talk to, and the dot and chat panel (GTK 4)
+agent/     the agent's workspace: its prompt (system-prompt.md) and guards
 android/   the phone and watch apps (Kotlin): core, mobile, wear
 scripts/   setup (start.sh runs it), the HTTPS certificates, and the hotkey
 ```
@@ -12,19 +12,19 @@ scripts/   setup (start.sh runs it), the HTTPS certificates, and the hotkey
 ## Setup
 
 ```bash
-./start.sh   # sets up whatever is missing (system packages, Python env, .env, certificates, mouse access, what the harness needs, the desktop app), then starts Saambha
+./start.sh   # sets up whatever is missing (system packages, .env, certificates, mouse access, the app, speech, what the harness needs), then starts Saambha
 ```
 
-Saambha then runs in the background (the `saambha` and `saambha-desktop` systemd user services) and starts when you log in. A small microphone dot floats above your windows (drag it anywhere), grey while the local model is cold; clicking it opens the chat, with the detailed logs a button away.
+Saambha then runs in the background (the `saambha` systemd user service) and starts when you log in. A small microphone dot floats above your windows (drag it anywhere), grey while the local model is cold; clicking it opens the chat, with the detailed logs a button away.
 
-Put secrets and your settings in `server/.env` (see `server/.env.sample`). Any setting in `server/src/saambha/settings.py` can be overridden there as `SAAMBHA_<NAME>`. After changing them, run `./start.sh` again. To run the server in a terminal instead: `systemctl --user stop saambha`, then `cd server && PYTHONPATH=src venv/bin/python -m saambha`.
+Put secrets and your settings in `desktop/.env` (see `desktop/.env.sample`). Any setting in `desktop/src/server/settings.rs` can be overridden there as `SAAMBHA_<NAME>`. After changing them, run `./start.sh` again. To run it in a terminal instead: `systemctl --user stop saambha`, then `desktop/target/release/saambha`.
 
 ## Harness
 
 Commands run through an agent harness, `SAAMBHA_HARNESS`:
 
 - `claude` (default): [Claude Code](https://claude.com/claude-code). Log in once: run `claude`, then `/login`.
-- `pi`: [pi](https://pi.dev), with `SAAMBHA_PI_MODEL`. For a hosted model, log in once: run `pi`, then `/login`. For a local one, use `ollama/saambha-<model>` (e.g. `ollama/saambha-gemma4:e4b`): `start.sh` sets it up in Ollama, and the server unloads it while something heavy (a game, a render) runs.
+- `pi`: [pi](https://pi.dev), with `SAAMBHA_PI_MODEL`. For a hosted model, log in once: run `pi`, then `/login`. For a local one, use `ollama/saambha-<model>` (e.g. `ollama/saambha-gemma4:e4b`): `start.sh` sets it up in Ollama, and Saambha unloads it while something heavy (a game, a render) runs.
 
 ## Hotkey
 
@@ -32,7 +32,7 @@ Bind `scripts/saambha-trigger.sh` to a keyboard shortcut (e.g. `Super+C`).
 
 ## Phone and watch apps
 
-Build (needs JDK 17 + Android SDK, and `server/ca.pem` from `start.sh`):
+Build (needs JDK 17 + Android SDK, and `desktop/ca.pem` from `start.sh`):
 
 ```bash
 cd android && ./gradlew assembleDebug
@@ -46,20 +46,19 @@ adb connect <ip>:<port>
 adb install -r android/mobile/build/outputs/apk/debug/mobile-debug.apk   # or wear/.../wear-debug.apk
 ```
 
-The app finds the server on your Wi-Fi when it opens. The first time, click **Allow** in the popup that opens on the desktop. To unpair a device, remove it from `server/devices.json`.
+The app finds the server on your Wi-Fi when it opens. The first time, click **Allow** in the popup that opens on the desktop. To unpair a device, remove it from `desktop/devices.json`.
 
 **Mouse** turns the screen into a touchpad for the desktop: slide to move, tap to click, hold (or tap with two fingers) to right-click, slide two fingers or turn the watch's crown to scroll.
 
 ## Skills
 
-Skills live in their own git repo, not in this one: one folder per skill, each with a `SKILL.md` (frontmatter with `name` and `description`, then instructions) and any scripts it needs. To connect yours, clone it and point `SAAMBHA_SKILLS_DIR` in `server/.env` at it (default: `~/saambha-skills`), then run `./start.sh` again.
+Skills live in their own git repo, not in this one: one folder per skill, each with a `SKILL.md` (frontmatter with `name` and `description`, then instructions) and any scripts it needs. To connect yours, clone it and point `SAAMBHA_SKILLS_DIR` in `desktop/.env` at it (default: `~/saambha-skills`), then run `./start.sh` again.
 
-Rules that apply to every request go in `server/system-prompt.md`.
+Rules that apply to every request go in `agent/system-prompt.md`.
 
 ## Tests
 
 ```bash
-cd server && venv/bin/pip install -r requirements-dev.txt && venv/bin/ruff check src tests && venv/bin/pytest
 cd desktop && cargo test
 cd android && ./gradlew :core:testDebugUnitTest
 ```
