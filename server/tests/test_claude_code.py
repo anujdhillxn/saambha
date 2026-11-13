@@ -1,3 +1,4 @@
+import json
 import os
 import threading
 
@@ -26,7 +27,16 @@ def test_runs_in_the_workspace_with_model_and_system_prompt(claude, fakes, works
     assert args[args.index("--model") + 1] == "test-model"
     assert args[args.index("--effort") + 1] == "low"  # its least, for "off"
     assert args[args.index("--system-prompt") + 1] == SYSTEM_PROMPT.read_text().strip()
-    assert args[args.index("--allowedTools") + 1:args.index("--allowedTools") + 3] == ["Bash", "Skill"]
+    assert args[args.index("--tools") + 1] == args[args.index("--allowedTools") + 1] == "Bash,Skill,WebSearch"
+
+
+def test_none_of_the_users_own_claude_code_setup(claude, fakes):
+    claude.ask("hi")
+
+    [call] = fakes.claude_calls()
+    args = call["args"]
+    assert args[args.index("--setting-sources") + 1] == "project"
+    assert "--strict-mcp-config" in args
 
 
 def test_skills_are_where_claude_code_looks(claude, workspace):
@@ -35,6 +45,14 @@ def test_skills_are_where_claude_code_looks(claude, workspace):
 
 def test_the_real_workspace_has_the_guard():
     assert "sudo is not allowed" in (ROOT / ".claude" / "settings.json").read_text()
+
+
+def test_the_real_workspace_turns_off_what_claude_code_brings_for_developers():
+    settings = json.loads((ROOT / ".claude" / "settings.json").read_text())
+
+    assert settings["autoMemoryEnabled"] is False and settings["disableBundledSkills"] is True
+    assert "**/CLAUDE.md" in settings["claudeMdExcludes"]
+    assert not any(settings["enabledPlugins"].values())
 
 
 def test_follow_up_resumes_the_session(claude, fakes):

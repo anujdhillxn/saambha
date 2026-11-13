@@ -2,6 +2,8 @@
 
 Claude Code finds the sudo / rm -rf guard in .claude/settings.json because it runs with the
 workspace as its cwd. It only looks for skills in .claude/skills, so that is kept a link to skills_dir.
+It reads only those settings, not the user's own (their skills, plugins, MCP servers, memory), which
+also turn off what Claude Code brings for developers (CLAUDE.md files, its bundled skills and plugins).
 """
 import logging
 import os
@@ -16,6 +18,7 @@ log = logging.getLogger(__name__)
 
 class ClaudeCodeHarness(Harness):
     name = "claude"
+    TOOLS = "Bash,Skill,WebSearch"
 
     def __init__(self, binary: str, workspace: Path, system_prompt_file: Path, model: str, effort: str,
                  sessions: SessionStore, timeout: float, prompt_vars: Mapping[str, str], skills_dir: Path):
@@ -52,7 +55,10 @@ class ClaudeCodeHarness(Harness):
             "--output-format", "stream-json",
             "--model", self.model,
             "--effort", "low" if self.effort == "off" else self.effort,  # Claude Code can't turn it off
-            "--allowedTools", "Bash", "Skill",
+            "--tools", self.TOOLS,  # the only ones it has
+            "--allowedTools", self.TOOLS,  # and they run without asking
+            "--setting-sources", "project",
+            "--strict-mcp-config",
             "--system-prompt", self.system_prompt,
             "--verbose",
         ]
